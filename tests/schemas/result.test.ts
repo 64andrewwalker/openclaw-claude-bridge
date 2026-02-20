@@ -92,6 +92,21 @@ describe('ResultSchema', () => {
     }
   });
 
+  it('accepts a failed result with null session_id', () => {
+    const input = {
+      run_id: 'run-001',
+      status: 'failed',
+      summary: 'Failed before session started',
+      session_id: null,
+      artifacts: [],
+      duration_ms: 100,
+      token_usage: null,
+      error: { code: 'WORKSPACE_NOT_FOUND', message: 'Not found', retryable: false },
+    };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+  });
+
   it('accepts a completed result without error field', () => {
     // completed status should not require error
     const result = validateResult(validSuccess);
