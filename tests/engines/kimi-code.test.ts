@@ -95,6 +95,62 @@ describe('KimiCodeEngine', () => {
     expect(result.error).toBeUndefined();
   });
 
+  // --- Variant / Edge Case Tests ---
+
+  it('handles empty content array gracefully', async () => {
+    const payload = '{"role":"assistant","content":[]}';
+    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('handles content with only think parts (no text)', async () => {
+    const payload = '{"role":"assistant","content":[{"type":"think","think":"deep thought"}]}';
+    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('handles content with mixed tool_use and text parts', async () => {
+    const payload = '{"role":"assistant","content":[{"type":"tool_use","name":"bash","input":"ls"},{"type":"text","text":"done"}]}';
+    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('done');
+  });
+
+  it('falls back to raw output when JSON has no content field', async () => {
+    const payload = '{"role":"assistant","message":"no content field"}';
+    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+    const result = await engine.start(makeRequest());
+    // Falls back to trimmed raw output since no content array
+    expect(result.output).toContain('no content field');
+  });
+
+  it('parses trailing JSON after non-JSON log lines', async () => {
+    const engine = new KimiCodeEngine({
+      command: 'sh',
+      defaultArgs: ['-c', `printf 'WARN: preface\\n{"role":"assistant","content":[{"type":"text","text":"tail json"}]}\\n'`],
+    });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('tail json');
+  });
+
+  it('handles completely non-JSON output as raw text', async () => {
+    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: ['plain text output'] });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('plain text output');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('always returns null sessionId', async () => {
+    const payload = '{"role":"assistant","content":[{"type":"text","text":"test"}],"session_id":"should-be-ignored"}';
+    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+    const result = await engine.start(makeRequest());
+    expect(result.sessionId).toBeNull();
+  });
+
   it('builds resume args with --session flag', async () => {
     // Use node -e to echo all args as JSON. send() passes args directly to spawn.
     const engine = new KimiCodeEngine({

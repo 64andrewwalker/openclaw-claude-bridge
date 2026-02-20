@@ -85,6 +85,47 @@ describe('E2E: codebridge CLI', () => {
     expect(request.mode).toBe('new');
   });
 
+  it('submit with --engine kimi-code creates run with correct engine field', () => {
+    const stdout = execSync(
+      `${CLI} submit --intent coding --workspace "${workspaceDir}" --message "Test kimi" --runs-dir "${runsDir}" --engine kimi-code`,
+      { encoding: 'utf-8', cwd: CWD }
+    );
+    const output = JSON.parse(stdout.trim());
+    expect(output.run_id).toMatch(/^run-/);
+
+    const requestPath = path.join(runsDir, output.run_id, 'request.json');
+    const request = JSON.parse(fs.readFileSync(requestPath, 'utf-8'));
+    expect(request.engine).toBe('kimi-code');
+  });
+
+  it('status shows kimi-code engine after kimi submit', () => {
+    const submitOut = execSync(
+      `${CLI} submit --intent debug --workspace "${workspaceDir}" --message "Debug with kimi" --runs-dir "${runsDir}" --engine kimi-code`,
+      { encoding: 'utf-8', cwd: CWD }
+    );
+    const { run_id } = JSON.parse(submitOut.trim());
+
+    const statusOut = execSync(
+      `${CLI} status ${run_id} --runs-dir "${runsDir}"`,
+      { encoding: 'utf-8', cwd: CWD }
+    );
+    const session = JSON.parse(statusOut.trim());
+    expect(session.engine).toBe('kimi-code');
+    expect(session.state).toBe('created');
+  });
+
+  it('submit --wait with kimi-code engine completes end-to-end', () => {
+    const stdout = execSync(
+      `${CLI} submit --intent coding --workspace "${workspaceDir}" --message "Reply with exactly: hello from kimi" --runs-dir "${runsDir}" --engine kimi-code --wait --timeout 60000`,
+      { encoding: 'utf-8', cwd: CWD, timeout: 90000 }
+    );
+    const result = JSON.parse(stdout.trim());
+    expect(result.status).toBe('completed');
+    expect(result.summary).toBeTruthy();
+    expect(result.duration_ms).toBeTypeOf('number');
+    expect(result.token_usage).toBeNull();
+  }, 90000);
+
   it('logs command works on a fresh run', () => {
     const submitOut = execSync(
       `${CLI} submit --intent coding --workspace "${workspaceDir}" --message "Test" --runs-dir "${runsDir}"`,
