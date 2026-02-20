@@ -5,6 +5,7 @@ import { resumeCommand } from './commands/resume.js';
 import { stopCommand } from './commands/stop.js';
 import { logsCommand } from './commands/logs.js';
 import { doctorCommand } from './commands/doctor.js';
+import { startCommand } from './commands/start.js';
 
 const program = new Command();
 program
@@ -18,5 +19,6 @@ program.addCommand(resumeCommand());
 program.addCommand(stopCommand());
 program.addCommand(logsCommand());
 program.addCommand(doctorCommand());
+program.addCommand(startCommand());
 
 program.parse();

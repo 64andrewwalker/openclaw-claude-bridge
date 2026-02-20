@@ -84,4 +84,8 @@ export class RunManager {
   getRunDir(runId: string): string {
     return path.join(this.runsDir, runId);
   }
+
+  getRunsDir(): string {
+    return this.runsDir;
+  }
 }
