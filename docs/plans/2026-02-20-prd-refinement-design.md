@@ -19,6 +19,11 @@ Original PRD (`docs/PRD.md`) describes an OpenClaw-Claude bridge. Through brains
 | 7 | **一个任务 = 一个 Claude Code 会话** | 保持完整上下文，通过 `--resume` 续接 |
 | 8 | **Bridge 自动管理会话生命周期** | 同任务追加指令自动 resume，新任务开新会话 |
 | 9 | **意图识别由 OpenClaw agent 完成**，Skill 只负责"被选中后怎么用" | 渐进式披露，节约 context |
+| 10 | **submit 默认 --no-wait** | 编码任务耗时长，阻塞不合理 |
+| 11 | **文件原子写入用 rename，不用 lock** | V1 单 runner，两次 rename 够用 |
+| 12 | **状态机去掉 paused，补 stop 命令** | paused 无触发场景，stop 是必要操作 |
+| 13 | **安全边界 V1 只做 allowed_roots + 路径校验** | 单人自用，Claude Code 自带权限控制 |
+| 14 | **错误码和 usage 在 schema 层统一** | Skill 只做展示，不做底层分类 |
 
 ## Improvement 1: Core Architecture Repositioning
 
@@ -64,15 +69,18 @@ PRD 中 MCP Adapter 方向反了。写的是"给 Claude Code 注入 OpenClaw 工
 
 **会话状态机**：
 ```
-created → running → paused → completed
+created → running → completed
                   ↘ failed
+           ↓
+         stopping → completed (force-stopped)
 ```
 
 **文件落盘**：
 - `.runs/<run_id>/session.json` — 会话元数据
   - `engine`: "claude-code"
   - `session_id`: Claude Code 会话 ID
-  - `state`: created | running | paused | completed | failed
+  - `state`: created | running | stopping | completed | failed
+  - `pid`: number | null — 引擎进程 PID（用于重启对账）
   - `created_at`, `last_active_at`
 
 **会话创建**：新任务自动启动新 Claude Code 会话。
@@ -237,6 +245,161 @@ codebridge/
 - 多引擎实现（V2 — V1 只做 Claude Code，接口已预留）
 - 跨机器部署（V2 — V1 同机部署）
 
+## Improvement 7: Execution Contract (from Codex review)
+
+### Problem
+
+submit 是阻塞等待结果还是立即返回 run_id？未定义会导致 status/resume 语义模糊。
+
+### New Section: §6.7 执行契约
+
+**submit 默认行为**：`--no-wait`（立即返回 run_id + 初始状态）
+- `codebridge submit ...` → 立即返回 `{ run_id, status: "created" }`
+- `codebridge submit --wait ...` → 阻塞直到任务完成或超时，返回完整 result
+- `codebridge submit --wait --timeout 300 ...` → 最多等 300 秒
+
+**返回字段约定**：
+- `--no-wait` 返回：`{ run_id, status, created_at }`
+- `--wait` 返回：与 `result.json` 相同的完整结构
+- 超时退出码非零，stdout 仍输出当前状态 JSON
+
+**status 语义**：只读查询，不触发任何副作用。
+**resume 语义**：向已有会话追加指令，默认 `--no-wait`，同样支持 `--wait`。
+
+## Improvement 8: File Atomicity (from Codex review)
+
+### Problem
+
+CLI 写 request.json 时 runner 可能读到半写入文件。
+
+### Solution（简化版，不过度设计）
+
+**写入协议**：
+1. CLI 写入 `.runs/<run_id>/request.tmp`
+2. `rename("request.tmp", "request.json")` — 原子操作
+
+**消费协议**：
+1. runner 检测到 `request.json` 存在
+2. runner `rename("request.json", "request.processing.json")` — 原子消费标记，防止重复消费
+3. 执行完毕后写入 `result.json`
+
+两次 rename 即可，不需要 lock 文件或哨兵文件。V1 单 runner 进程无并发竞争。
+
+## Improvement 9: Simplified State Machine (from Codex review)
+
+### Problem
+
+paused 状态无实际触发场景，stop 命令缺失。
+
+### Changes
+
+**删除 paused 状态**。V1 状态机简化为：
+
+```
+created → running → completed
+                  ↘ failed
+           ↓
+         stopping → completed (force-stopped)
+```
+
+**状态转移表**：
+
+| From | Event | To | Trigger |
+|------|-------|----|---------|
+| created | runner picks up | running | runner 检测到 request.json |
+| running | engine completes | completed | Claude Code 正常退出 |
+| running | engine errors | failed | 不可恢复错误 / 超时 |
+| running | user stops | stopping | `codebridge stop <run_id>` |
+| stopping | engine terminated | completed | 进程清理完毕 |
+
+**补充 stop 到命令列表**：
+- `codebridge stop <run_id>` — 终止进行中的任务
+- 加入 M3 里程碑
+
+## Improvement 10: Restart Reconciliation (from Codex review)
+
+### Problem
+
+runner 重启后如何与真实引擎状态对账。
+
+### New Section: §6.8 重启对账流程
+
+bridge-runner 启动时执行 reconciliation：
+
+1. **扫描** `.runs/` 目录，找所有 `session.json` 中 state=running 的 run
+2. **探测引擎状态**：
+   - 检查 `session.json` 中记录的 pid 是否仍在运行
+   - 如果进程存在 → 保持 running，重新 attach 监控
+   - 如果进程不存在 → 检查是否有 `result.json`
+     - 有 result.json → 标记 completed/failed（以 result 为准）
+     - 无 result.json → 标记 `failed`，error.code = "runner_crash_recovery"，error.retryable = true
+3. **日志记录**：所有 reconciliation 动作写入 `logs/reconciliation.log`
+
+`session.json` 新增字段：
+- `pid`: number | null — 引擎进程 PID
+
+## Improvement 11: Security Boundaries (from Codex review)
+
+### Problem
+
+V1 虽然单人自用，但执行代理的核心风险仍需基本防护。
+
+### Changes（V1 轻量版）
+
+**request.json 新增安全字段**：
+- `allowed_roots`: string[] — workspace 白名单（默认仅 workspace_path 本身）
+- `constraints.allow_network`: boolean — 是否允许网络访问（默认 true）
+
+**执行器校验**（runner 在启动引擎前）：
+1. `workspace_path` 必须 resolve 后在 `allowed_roots` 内（防路径穿越）
+2. `workspace_path` 必须存在且为目录
+3. 拒绝 `/`, `/etc`, `/usr`, `$HOME` 等危险根路径
+
+**V2 扩展预留**：
+- `constraints.allow_commands` / `constraints.deny_commands`
+- `constraints.network_policy`（per-domain 控制）
+- 沙箱执行（container / namespace）
+
+**注意**：Claude Code 自身已有权限控制机制，bridge 层只做入口校验，不重复实现。
+
+## Improvement 12: Standardized Error & Usage Model (from Codex review)
+
+### Problem
+
+错误码和 token usage 格式需要在 schema 层统一，不能依赖 Skill 做底层分类。
+
+### Changes
+
+**统一错误码**（定义在 `specs/error-codes.md` 或 schema 内）：
+
+| Code | Category | Retryable | Description |
+|------|----------|-----------|-------------|
+| `ENGINE_TIMEOUT` | engine | yes | 引擎执行超时 |
+| `ENGINE_CRASH` | engine | yes | 引擎进程异常退出 |
+| `ENGINE_AUTH` | engine | no | 引擎认证失败（token/subscription） |
+| `NETWORK_ERROR` | network | yes | 网络连接失败 |
+| `WORKSPACE_INVALID` | input | no | workspace 路径无效或越界 |
+| `WORKSPACE_NOT_FOUND` | input | no | workspace 不存在 |
+| `REQUEST_INVALID` | input | no | request.json 格式错误 |
+| `RUNNER_CRASH_RECOVERY` | internal | yes | runner 重启后发现的孤儿任务 |
+
+**统一 token usage 格式**（所有引擎适配器必须输出）：
+```json
+{
+  "token_usage": {
+    "prompt_tokens": 1234,
+    "completion_tokens": 567,
+    "total_tokens": 1801
+  }
+}
+```
+引擎不提供时字段为 null（整个对象），不省略字段。
+
+**职责分离**：
+- Schema 层：定义错误码、usage 格式
+- Engine adapter：负责将引擎原始错误映射为统一错误码
+- Skill 层：只做展示和重试决策（根据 retryable 字段），不做分类
+
 ## Summary of All PRD Changes
 
 | Section | Action | Key Change |
@@ -244,10 +407,14 @@ codebridge/
 | §1 背景与目标 | 修改 | 项目改名 codebridge，定位改为 CLI-first |
 | §5 产品范围 | 修改 | Out of Scope 加入 MCP、多引擎实现、跨机部署 |
 | §6.1 架构组件 | 重写 | 去 MCP，改 CLI + runner + engine adapter |
-| §6.2 文件协议 | 扩展 | 新增 engine/session_id/mode/duration 字段 |
+| §6.2 文件协议 | 扩展 | 新增 engine/session_id/mode/duration 字段 + 原子写入协议 |
 | §6.3 控制流 | 重写 | 反映 CLI 调用链和 resume 流 |
-| §6.4 会话管理 | **新增** | 会话生命周期、状态机、落盘恢复 |
+| §6.4 会话管理 | **新增** | 简化状态机（去 paused）、落盘恢复 |
 | §6.5 多引擎抽象 | **新增** | Engine 接口、V1 只实现 claude-code |
 | §6.6 Skill 规范 | **新增** | 渐进式披露、Skill 职责定义 |
-| §10 里程碑 | 修正 | 反映 CLI-first 和会话管理 |
+| §6.7 执行契约 | **新增** | submit --wait/--no-wait 语义、返回字段约定 |
+| §6.8 重启对账 | **新增** | reconciliation 流程、PID 探测、孤儿任务处理 |
+| §7 安全边界 | **新增** | allowed_roots、路径穿越防护（V1 轻量版） |
+| §8 错误模型 | **新增** | 统一错误码、token usage 标准格式、职责分离 |
+| §10 里程碑 | 修正 | 反映 CLI-first、会话管理、stop 命令 |
 | §12 仓库结构 | 修正 | TS 项目结构，src/ 分层 |
