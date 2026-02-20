@@ -104,6 +104,27 @@ describe('TaskRunner', () => {
     }
   });
 
+  it('rejects sibling-prefix path that shares allowed_root prefix', async () => {
+    // /tmp/codebridge-workspace-xxx-evil should NOT match root /tmp/codebridge-workspace-xxx
+    const evilDir = fs.mkdtempSync(workspaceDir + '-evil');
+    try {
+      const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
+      const runner = new TaskRunner(runManager, sessionManager, engine);
+      const runId = await runManager.createRun({
+        task_id: 'task-sibling', intent: 'coding',
+        workspace_path: evilDir,
+        message: 'Sibling prefix', engine: 'claude-code', mode: 'new',
+        allowed_roots: [workspaceDir],
+      });
+      await runner.processRun(runId);
+      const resultPath = path.join(runsDir, runId, 'result.json');
+      const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+      expect(result.error.code).toBe('WORKSPACE_INVALID');
+    } finally {
+      fs.rmSync(evilDir, { recursive: true, force: true });
+    }
+  });
+
   it('allows workspace within allowed_roots', async () => {
     const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['secure ok'] });
     const runner = new TaskRunner(runManager, sessionManager, engine);

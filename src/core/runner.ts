@@ -32,9 +32,10 @@ export class TaskRunner {
     // Security: resolve workspace and check against allowed_roots
     const resolvedWorkspace = path.resolve(request.workspace_path);
     if (request.allowed_roots && request.allowed_roots.length > 0) {
-      const isAllowed = request.allowed_roots.some(root =>
-        resolvedWorkspace.startsWith(path.resolve(root))
-      );
+      const isAllowed = request.allowed_roots.some(root => {
+        const resolvedRoot = path.resolve(root);
+        return resolvedWorkspace === resolvedRoot || resolvedWorkspace.startsWith(resolvedRoot + path.sep);
+      });
       if (!isAllowed) {
         await this.fail(runId, startTime, makeError('WORKSPACE_INVALID',
           `Workspace ${resolvedWorkspace} is outside allowed roots: ${request.allowed_roots.join(', ')}`));
