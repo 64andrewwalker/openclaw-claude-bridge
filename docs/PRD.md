@@ -178,7 +178,7 @@
 ## 12. 仓库初始结构（建议）
 
 ```
-openclaw-claude-bridge/
+codebridge/
   PRD.md
   README.md
   specs/

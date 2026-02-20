@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 LOCAL_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REMOTE_DIR="${CODEBRIDGE_REMOTE_DIR:-~/openclaw-claude-bridge}"
+REMOTE_DIR="${CODEBRIDGE_REMOTE_DIR:-~/codebridge}"
 PERMISSION_MODE="${CODEBRIDGE_CLAUDE_PERMISSION_MODE:-bypassPermissions}"
 POLL_INTERVAL_MS="${CODEBRIDGE_POLL_INTERVAL_MS:-700}"
 POLL_MAX="${CODEBRIDGE_POLL_MAX:-180}"
@@ -186,7 +186,7 @@ MSG3="$(cat <<'EOF'
 Start a NEW independent task.
 
 Create a practical zsh tuning report at:
-~/openclaw-claude-bridge/zsh-tuning-report.md
+~/codebridge/zsh-tuning-report.md
 
 Requirements:
 1) Measure interactive startup time baseline with 5 runs:
@@ -203,7 +203,7 @@ Requirements:
 EOF
 )"
 
-SUBMIT2="$(node dist/cli/index.js submit --intent ops --workspace "$HOME/openclaw-claude-bridge" --message "$MSG3" --runs-dir "$RUNS_DIR")"
+SUBMIT2="$(node dist/cli/index.js submit --intent ops --workspace "$HOME/codebridge" --message "$MSG3" --runs-dir "$RUNS_DIR")"
 RUN2_ID="$(printf '%s' "$SUBMIT2" | json_field run_id)"
 echo "[run2] id=$RUN2_ID"
 poll_run "$RUN2_ID" "run2"
@@ -218,7 +218,7 @@ if [[ "$RUN1_SESSION" == "$RUN2_SESSION" ]]; then
   exit 1
 fi
 
-REPORT_PATH="$HOME/openclaw-claude-bridge/zsh-tuning-report.md"
+REPORT_PATH="$HOME/codebridge/zsh-tuning-report.md"
 [[ -s "$REPORT_PATH" ]]
 
 echo "[e2e] completed successfully"

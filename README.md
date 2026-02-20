@@ -1,6 +1,6 @@
-# openclaw-claude-bridge
+# codebridge
 
-File-driven bridge that lets OpenClaw delegate hard coding/ops tasks to Claude Code CLI through a compliant, auditable workflow.
+File-driven bridge that delegates complex coding/ops tasks to AI coding engines (Claude Code, Codex, OpenCode) through a compliant, auditable workflow.
 
 - PRD: `docs/PRD.md`
 - Next: implement MVP runner + MCP adapter + OpenClaw skill
@@ -21,7 +21,7 @@ Useful options:
 ```
 
 Environment variables:
-- `CODEBRIDGE_REMOTE_DIR` (default: `~/openclaw-claude-bridge`)
+- `CODEBRIDGE_REMOTE_DIR` (default: `~/codebridge`)
 - `CODEBRIDGE_CLAUDE_PERMISSION_MODE` (default: `bypassPermissions`)
 - `CODEBRIDGE_POLL_INTERVAL_MS` (default: `700`)
 - `CODEBRIDGE_POLL_MAX` (default: `180`)
