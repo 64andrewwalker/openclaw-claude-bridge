@@ -12,7 +12,7 @@ CodeBridge is a file-driven task execution bridge that lets OpenClaw delegate co
 npm run build        # TypeScript compile to dist/, marks CLI executable
 npm test             # Vitest full suite (single run)
 npm run test:watch   # Vitest in watch mode
-npm run dev          # Run src/index.ts with tsx
+npm run dev          # Run CLI with tsx
 
 # Single test file
 npx vitest run tests/core/runner.test.ts
@@ -90,3 +90,14 @@ On daemon startup, `Reconciler` scans runs stuck in `running` state. Probes PID 
 | `CODEBRIDGE_POLL_INTERVAL_MS` | E2E script poll interval |
 | `CODEBRIDGE_POLL_MAX` | E2E script max poll iterations |
 | `CODEBRIDGE_REMOTE_DIR` | E2E script remote directory |
+
+## PR 审查默认流程
+
+- 当用户发来 PR 链接/列表要求 review 时，默认直接执行端到端审查，不只停留在建议。
+- 必查三点：
+  1) 是否真正解决问题。
+  2) 更改是否合理（含回归风险、可维护性、测试覆盖）。
+  3) 是否可直接合并，或必须修改后再合并。
+- 有较大问题：在 PR 下给出阻塞评论（明确文件/风险/结论），不合并。
+- 只有小问题：直接在对应 PR 分支修复、补测试并验证，通过后再合并。
+- 审查结论要包含：每个 PR 的处理决定（merge / changes requested）和关键依据。
