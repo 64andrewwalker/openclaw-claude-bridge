@@ -21,6 +21,7 @@ export function submitCommand(): Command {
         message: opts.message,
         engine: opts.engine,
         mode: 'new',
+        constraints: { timeout_ms: parseInt(opts.timeout), allow_network: true },
       });
 
       if (!opts.wait) {

@@ -29,4 +29,12 @@ export class SessionManager {
     await this.runManager.updateSession(runId, { state: newState, ...updates });
     return this.getSession(runId);
   }
+
+  async resetForResume(runId: string): Promise<void> {
+    const current = await this.getSession(runId);
+    if (current.state !== 'completed' && current.state !== 'failed') {
+      throw new Error(`Cannot resume from state: ${current.state} (must be completed or failed)`);
+    }
+    await this.runManager.updateSession(runId, { state: 'created' });
+  }
 }

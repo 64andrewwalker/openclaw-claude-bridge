@@ -106,4 +106,28 @@ describe('SessionManager', () => {
     expect(result.pid).toBe(99999);
     expect(result.session_id).toBe('sess-xyz');
   });
+
+  it('resetForResume resets completed session to created', async () => {
+    const runId = await createTestRun();
+    await sessionManager.transition(runId, 'running', { pid: 12345 });
+    await sessionManager.transition(runId, 'completed');
+    await sessionManager.resetForResume(runId);
+    const session = await sessionManager.getSession(runId);
+    expect(session.state).toBe('created');
+  });
+
+  it('resetForResume resets failed session to created', async () => {
+    const runId = await createTestRun();
+    await sessionManager.transition(runId, 'running', { pid: 12345 });
+    await sessionManager.transition(runId, 'failed');
+    await sessionManager.resetForResume(runId);
+    const session = await sessionManager.getSession(runId);
+    expect(session.state).toBe('created');
+  });
+
+  it('resetForResume rejects running session', async () => {
+    const runId = await createTestRun();
+    await sessionManager.transition(runId, 'running', { pid: 12345 });
+    await expect(sessionManager.resetForResume(runId)).rejects.toThrow(/cannot resume from state/i);
+  });
 });
