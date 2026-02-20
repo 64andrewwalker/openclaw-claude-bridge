@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CodeBridge is a file-driven task execution bridge that lets OpenClaw delegate complex coding tasks to Claude Code CLI. It uses the filesystem as its message bus — each task is a directory under `.runs/` containing `request.json`, `session.json`, and `result.json`.
+CodeBridge is a file-driven task execution bridge that lets OpenClaw delegate complex coding tasks to AI coding agents (Claude Code, Kimi Code). It uses the filesystem as its message bus — each task is a directory under `.runs/` containing `request.json`, `session.json`, and `result.json`.
 
 ## Commands
 
@@ -42,7 +42,9 @@ Daemon (polls .runs/) → finds created runs with request.json
 TaskRunner → consumes request atomically, validates schema + security boundaries,
              invokes Engine, writes result.json
                          ↓
-ClaudeCodeEngine → spawns `claude` CLI with --print --output-format json
+Engine (resolved by registry) → spawns CLI with appropriate flags
+  ClaudeCodeEngine → `claude --print --output-format json`
+  KimiCodeEngine   → `kimi --print --output-format stream-json -w <workspace>`
 ```
 
 ### Session State Machine
@@ -70,7 +72,10 @@ On daemon startup, `Reconciler` scans runs stuck in `running` state. Probes PID 
 - **`src/core/run-manager.ts`** — Atomic file I/O for run directories (tmp→rename pattern)
 - **`src/core/session-manager.ts`** — State machine enforcement
 - **`src/core/reconciler.ts`** — Startup crash recovery
+- **`src/engines/base-engine.ts`** — Shared exec/timeout/output-cap infrastructure for all engines
 - **`src/engines/claude-code.ts`** — Spawns `claude` CLI, parses JSON output, extracts session_id and token_usage
+- **`src/engines/kimi-code.ts`** — Spawns `kimi` CLI, parses stream-json NDJSON output
+- **`src/engines/index.ts`** — Engine registry: `resolveEngine(name)` maps engine name to Engine instance
 - **`src/schemas/`** — Zod schemas for request, result, session, and error codes
 
 ## Conventions
