@@ -102,6 +102,28 @@ describe('Reconciler', () => {
     expect(actions).toHaveLength(0);
   });
 
+  it('writes reconciliation actions to log files', async () => {
+    const runId = await runManager.createRun({
+      task_id: 'task-log', intent: 'coding', workspace_path: '/tmp/project',
+      message: 'Log test', engine: 'claude-code', mode: 'new',
+    });
+    await runManager.updateSession(runId, { state: 'running', pid: 99999 });
+
+    const reconciler = new Reconciler(runManager);
+    await reconciler.reconcile();
+
+    // Check global log
+    const globalLog = fs.readFileSync(path.join(runsDir, 'reconciliation.log'), 'utf-8');
+    expect(globalLog).toContain(runId);
+    expect(globalLog).toContain('marked_failed');
+
+    // Check per-run log
+    const runLog = fs.readFileSync(
+      path.join(runsDir, runId, 'logs', 'reconciliation.log'), 'utf-8'
+    );
+    expect(runLog).toContain(runId);
+  });
+
   it('reconciles failed task from result.json with failed status', async () => {
     const runId = await runManager.createRun({
       task_id: 'task-005',
