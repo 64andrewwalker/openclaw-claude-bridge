@@ -7,11 +7,12 @@ export function startCommand(): Command {
     .option('--runs-dir <path>', 'Runs directory', path.join(process.cwd(), '.runs'))
     .option('--poll-interval <ms>', 'Poll interval in milliseconds', '2000')
     .option('--max-concurrent <n>', 'Maximum concurrent run executions', '4')
+    .option('--engine <name>', 'Engine to use', 'claude-code')
     .action(async (opts) => {
       const { Daemon } = await import('../../core/daemon.js');
-      const { ClaudeCodeEngine } = await import('../../engines/claude-code.js');
+      const { resolveEngine } = await import('../../engines/index.js');
 
-      const engine = new ClaudeCodeEngine();
+      const engine = resolveEngine(opts.engine);
       const daemon = new Daemon(opts.runsDir, engine, parseInt(opts.pollInterval), parseInt(opts.maxConcurrent));
 
       process.on('SIGINT', async () => { await daemon.stop(); process.exit(0); });

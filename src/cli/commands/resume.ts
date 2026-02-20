@@ -51,9 +51,9 @@ export function resumeCommand(): Command {
       }
 
       // --wait mode: process immediately
-      const { ClaudeCodeEngine } = await import('../../engines/claude-code.js');
+      const { resolveEngine } = await import('../../engines/index.js');
       const { TaskRunner } = await import('../../core/runner.js');
-      const engine = new ClaudeCodeEngine();
+      const engine = resolveEngine(session.engine);
       const runner = new TaskRunner(runManager, sessionManager, engine);
       await runner.processRun(runId);
       const result = readFileSync(path.join(opts.runsDir, runId, 'result.json'), 'utf-8');

@@ -31,10 +31,10 @@ export function submitCommand(): Command {
 
       // --wait mode
       const { SessionManager } = await import('../../core/session-manager.js');
-      const { ClaudeCodeEngine } = await import('../../engines/claude-code.js');
+      const { resolveEngine } = await import('../../engines/index.js');
       const { TaskRunner } = await import('../../core/runner.js');
       const sessionManager = new SessionManager(runManager);
-      const engine = new ClaudeCodeEngine();
+      const engine = resolveEngine(opts.engine);
       const runner = new TaskRunner(runManager, sessionManager, engine);
       await runner.processRun(runId);
       const { readFileSync } = await import('node:fs');
