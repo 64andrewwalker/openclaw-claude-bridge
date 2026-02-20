@@ -1,17 +1,11 @@
 import type { TaskRequest } from '../schemas/request.js';
 
-export interface EngineError {
-  code: string;
-  message: string;
-  retryable: boolean;
-}
-
 export interface EngineResponse {
   output: string;
   pid: number;
   exitCode: number | null;
   sessionId: string | null;
-  error?: EngineError;
+  error?: { code: string; message: string; retryable: boolean };
   tokenUsage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null;
 }
 

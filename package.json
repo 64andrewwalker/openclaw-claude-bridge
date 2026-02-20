@@ -2,7 +2,7 @@
   "name": "codebridge",
   "version": "0.1.0",
   "description": "CLI bridge for delegating coding tasks to AI engines (Claude Code, Codex, OpenCode)",
-  "main": "dist/index.js",
+  "main": "dist/cli/index.js",
   "bin": {
     "codebridge": "dist/cli/index.js"
   },
@@ -13,7 +13,7 @@
     "build": "tsc && chmod +x dist/cli/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/cli/index.ts"
   },
   "repository": {
     "type": "git",

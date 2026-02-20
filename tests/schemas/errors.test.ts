@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { ERROR_CODES, makeError, type ErrorCode } from '../../src/schemas/errors';
 
 describe('ERROR_CODES', () => {
-  it('has exactly 8 entries', () => {
-    expect(Object.keys(ERROR_CODES)).toHaveLength(8);
+  it('has exactly 9 entries', () => {
+    expect(Object.keys(ERROR_CODES)).toHaveLength(9);
   });
 });
 
@@ -33,6 +33,7 @@ describe('makeError', () => {
     ['WORKSPACE_NOT_FOUND', false],
     ['REQUEST_INVALID', false],
     ['RUNNER_CRASH_RECOVERY', true],
+    ['TASK_STOPPED', false],
   ] as [ErrorCode, boolean][])(
     '%s has retryable=%s',
     (code, expectedRetryable) => {
