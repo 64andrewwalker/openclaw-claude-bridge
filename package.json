@@ -10,7 +10,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/cli/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsx src/index.ts"

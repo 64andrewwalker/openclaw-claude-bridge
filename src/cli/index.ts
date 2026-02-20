@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from 'commander';
 import { submitCommand } from './commands/submit.js';
 import { statusCommand } from './commands/status.js';
