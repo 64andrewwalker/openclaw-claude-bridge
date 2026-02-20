@@ -35,7 +35,7 @@ export class RunManager {
       created_at: now,
       last_active_at: now,
     };
-    fs.writeFileSync(path.join(runDir, 'session.json'), JSON.stringify(session, null, 2));
+    this.atomicWriteJson(path.join(runDir, 'session.json'), session);
 
     return runId;
   }
@@ -64,21 +64,36 @@ export class RunManager {
     const requestPath = path.join(runDir, 'request.json');
     const processingPath = path.join(runDir, 'request.processing.json');
     if (!fs.existsSync(requestPath)) return null;
-    const raw = fs.readFileSync(requestPath, 'utf-8');
-    fs.renameSync(requestPath, processingPath);
+    try {
+      fs.renameSync(requestPath, processingPath);
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'ENOENT') return null;
+      throw err;
+    }
+    const raw = fs.readFileSync(processingPath, 'utf-8');
     return JSON.parse(raw) as TaskRequest;
   }
 
   async updateSession(runId: string, updates: Partial<Session>): Promise<void> {
-    const sessionPath = path.join(this.runsDir, runId, 'session.json');
-    const current = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
-    const updated = { ...current, ...updates, last_active_at: new Date().toISOString() };
-    fs.writeFileSync(sessionPath, JSON.stringify(updated, null, 2));
+    const runDir = path.join(this.runsDir, runId);
+    const sessionPath = path.join(runDir, 'session.json');
+    const lockPath = path.join(runDir, '.session.lock');
+
+    await this.withLock(lockPath, async () => {
+      const current = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
+      const updated = { ...current, ...updates, last_active_at: new Date().toISOString() };
+      this.atomicWriteJson(sessionPath, updated);
+    });
   }
 
   async writeResult(runId: string, result: Record<string, unknown>): Promise<void> {
-    const resultPath = path.join(this.runsDir, runId, 'result.json');
-    fs.writeFileSync(resultPath, JSON.stringify(result, null, 2));
+    const runDir = path.join(this.runsDir, runId);
+    const resultPath = path.join(runDir, 'result.json');
+    const lockPath = path.join(runDir, '.result.lock');
+    await this.withLock(lockPath, async () => {
+      this.atomicWriteJson(resultPath, result);
+    });
   }
 
   getRunDir(runId: string): string {
@@ -87,5 +102,38 @@ export class RunManager {
 
   getRunsDir(): string {
     return this.runsDir;
+  }
+
+  private atomicWriteJson(filePath: string, data: unknown): void {
+    const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2));
+    fs.renameSync(tmpPath, filePath);
+  }
+
+  private async withLock(lockPath: string, fn: () => Promise<void>): Promise<void> {
+    const timeoutMs = 5000;
+    const retryMs = 10;
+    const start = Date.now();
+
+    while (true) {
+      try {
+        const fd = fs.openSync(lockPath, 'wx');
+        fs.closeSync(fd);
+        break;
+      } catch (err) {
+        const e = err as NodeJS.ErrnoException;
+        if (e.code !== 'EEXIST') throw err;
+        if (Date.now() - start > timeoutMs) {
+          throw new Error(`Timed out acquiring lock: ${lockPath}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, retryMs));
+      }
+    }
+
+    try {
+      await fn();
+    } finally {
+      try { fs.unlinkSync(lockPath); } catch { /* best effort */ }
+    }
   }
 }

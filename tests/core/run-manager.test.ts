@@ -113,6 +113,9 @@ describe('RunManager', () => {
     const status = await manager.getStatus(runId);
     expect(status.state).toBe('running');
     expect(status.pid).toBe(12345);
+    const runDir = path.join(runsDir, runId);
+    const tempFiles = fs.readdirSync(runDir).filter((f) => f.includes('.tmp-') || f.endsWith('.lock'));
+    expect(tempFiles).toHaveLength(0);
   });
 
   it('writes and reads result.json', async () => {
@@ -129,5 +132,8 @@ describe('RunManager', () => {
     const resultPath = path.join(runsDir, runId, 'result.json');
     const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
     expect(result.status).toBe('completed');
+    const runDir = path.join(runsDir, runId);
+    const tempFiles = fs.readdirSync(runDir).filter((f) => f.includes('.tmp-') || f.endsWith('.lock'));
+    expect(tempFiles).toHaveLength(0);
   });
 });

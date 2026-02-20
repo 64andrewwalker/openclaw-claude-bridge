@@ -28,15 +28,14 @@
   },
   "homepage": "https://github.com/64andrewwalker/openclaw-claude-bridge#readme",
   "dependencies": {
-    "chokidar": "^5.0.0",
     "commander": "^14.0.3",
     "nanoid": "^5.1.6",
-    "typescript": "^5.9.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",
     "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
 }

@@ -22,7 +22,7 @@ describe('Stop lifecycle', () => {
     fs.rmSync(runsDir, { recursive: true, force: true });
   });
 
-  it('stop transitions running → stopping → completed with result.json', async () => {
+  it('stop transitions running → stopping → failed with result.json', async () => {
     // Create a run and set it to running with a real sleep process
     const runId = await runManager.createRun({
       task_id: 'task-stop', intent: 'coding', workspace_path: '/tmp',
@@ -40,19 +40,21 @@ describe('Stop lifecycle', () => {
     // Wait for exit
     await new Promise(resolve => child.on('close', resolve));
 
-    await sessionManager.transition(runId, 'completed');
+    await sessionManager.transition(runId, 'failed');
     await runManager.writeResult(runId, {
-      run_id: runId, status: 'completed', summary: 'Force-stopped',
+      run_id: runId, status: 'failed', summary: 'Force-stopped',
       session_id: null, artifacts: [], duration_ms: 0, token_usage: null,
+      error: { code: 'TASK_STOPPED', message: 'Task force-stopped by user', retryable: false },
     });
 
     const session = await runManager.getStatus(runId);
-    expect(session.state).toBe('completed');
+    expect(session.state).toBe('failed');
 
     const resultPath = path.join(runsDir, runId, 'result.json');
     expect(fs.existsSync(resultPath)).toBe(true);
     const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
-    expect(result.status).toBe('completed');
+    expect(result.status).toBe('failed');
     expect(result.summary).toContain('Force-stopped');
+    expect(result.error.code).toBe('TASK_STOPPED');
   });
 });

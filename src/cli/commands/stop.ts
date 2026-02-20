@@ -2,10 +2,7 @@ import { Command } from 'commander';
 import { RunManager } from '../../core/run-manager.js';
 import { SessionManager } from '../../core/session-manager.js';
 import path from 'node:path';
-
-function isProcessAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
-}
+import { isProcessAlive } from '../../utils/process.js';
 
 function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -48,16 +45,22 @@ export function stopCommand(): Command {
         stopped = !isProcessAlive(session.pid);
       }
 
-      // Transition to completed (force-stopped)
-      await sessionManager.transition(runId, 'completed');
+      // Force-stopped tasks are marked failed so consumers do not treat
+      // unfinished work as successful completion.
+      await sessionManager.transition(runId, 'failed');
       await runManager.writeResult(runId, {
         run_id: runId,
-        status: 'completed',
+        status: 'failed',
         summary: 'Task force-stopped by user',
         session_id: session.session_id ?? null,
         artifacts: [],
         duration_ms: 0,
         token_usage: null,
+        error: {
+          code: 'TASK_STOPPED',
+          message: stopped ? 'Task force-stopped by user' : 'Task stop requested but process did not exit cleanly',
+          retryable: false,
+        },
       });
 
       process.stdout.write(JSON.stringify({ run_id: runId, status: 'stopped' }, null, 2) + '\n');

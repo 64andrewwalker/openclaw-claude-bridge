@@ -10,6 +10,7 @@ export interface ClaudeCodeOptions {
 }
 
 export class ClaudeCodeEngine implements Engine {
+  private static readonly MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
   private command: string;
   private defaultArgs: string[];
 
@@ -40,6 +41,8 @@ export class ClaudeCodeEngine implements Engine {
   private permissionArgs(): string[] {
     const permissionMode = process.env.CODEBRIDGE_CLAUDE_PERMISSION_MODE?.trim();
     if (!permissionMode) return [];
+    const validModes = new Set(['acceptEdits', 'bypassPermissions', 'default', 'dontAsk', 'plan']);
+    if (!validModes.has(permissionMode)) return [];
     return ['--permission-mode', permissionMode];
   }
 
@@ -55,7 +58,7 @@ export class ClaudeCodeEngine implements Engine {
         extraBins.push(path.join(home, '.local', 'bin'));
         extraBins.push(path.join(home, '.npm-global', 'bin'));
       }
-      const mergedPath = [...new Set([...extraBins, ...(process.env.PATH ?? '').split(':').filter(Boolean)])].join(':');
+      const mergedPath = [...new Set([...(process.env.PATH ?? '').split(':').filter(Boolean), ...extraBins])].join(':');
 
       const child = spawn(this.command, args, {
         cwd: cwd || process.cwd(),
@@ -68,6 +71,32 @@ export class ClaudeCodeEngine implements Engine {
       let stdout = '';
       let stderr = '';
       let timedOut = false;
+      let outputOverflow = false;
+      let totalBytes = 0;
+
+      const captureChunk = (chunk: Buffer, target: 'stdout' | 'stderr') => {
+        if (outputOverflow) return;
+        const incoming = chunk.toString();
+        const incomingBytes = Buffer.byteLength(incoming);
+        const remaining = ClaudeCodeEngine.MAX_OUTPUT_BYTES - totalBytes;
+
+        if (incomingBytes > remaining) {
+          if (remaining > 0) {
+            const partial = chunk.subarray(0, remaining).toString();
+            if (target === 'stdout') stdout += partial;
+            else stderr += partial;
+            totalBytes += remaining;
+          }
+          outputOverflow = true;
+          child.kill('SIGTERM');
+          setTimeout(() => child.kill('SIGKILL'), 1000);
+          return;
+        }
+
+        if (target === 'stdout') stdout += incoming;
+        else stderr += incoming;
+        totalBytes += incomingBytes;
+      };
 
       const timer = setTimeout(() => {
         timedOut = true;
@@ -75,14 +104,24 @@ export class ClaudeCodeEngine implements Engine {
         setTimeout(() => child.kill('SIGKILL'), 3000);
       }, timeoutMs);
 
-      child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-      child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      child.stdout?.on('data', (chunk: Buffer) => captureChunk(chunk, 'stdout'));
+      child.stderr?.on('data', (chunk: Buffer) => captureChunk(chunk, 'stderr'));
 
       child.on('close', (code) => {
         clearTimeout(timer);
         const parsed = this.parseClaudeJson(stdout);
         if (timedOut) {
           resolve({ output: stdout, pid: child.pid ?? 0, exitCode: code, sessionId: null, error: makeError('ENGINE_TIMEOUT', `Process killed after ${timeoutMs}ms`) });
+          return;
+        }
+        if (outputOverflow) {
+          resolve({
+            output: stdout,
+            pid: child.pid ?? 0,
+            exitCode: code,
+            sessionId: null,
+            error: makeError('ENGINE_CRASH', `Engine output exceeded ${ClaudeCodeEngine.MAX_OUTPUT_BYTES} bytes`),
+          });
           return;
         }
         if (code !== 0) {
@@ -115,7 +154,7 @@ export class ClaudeCodeEngine implements Engine {
       // Some environments may prepend warnings/logs. Try the last JSON line.
       const lines = trimmed.split('\n').map((l) => l.trim()).filter(Boolean).reverse();
       for (const line of lines) {
-        if (!line.startsWith('{')) continue;
+        if (!line.startsWith('{') && !line.startsWith('[')) continue;
         try {
           return JSON.parse(line) as Record<string, unknown>;
         } catch {

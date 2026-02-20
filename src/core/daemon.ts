@@ -13,12 +13,14 @@ export class Daemon {
   private reconciler: Reconciler;
   private pollInterval: NodeJS.Timeout | null = null;
   private processing = new Set<string>();
+  private maxConcurrent: number;
 
-  constructor(runsDir: string, engine: Engine, private intervalMs = 2000) {
+  constructor(runsDir: string, engine: Engine, private intervalMs = 2000, maxConcurrent = 4) {
     this.runManager = new RunManager(runsDir);
     this.sessionManager = new SessionManager(this.runManager);
     this.runner = new TaskRunner(this.runManager, this.sessionManager, engine);
     this.reconciler = new Reconciler(this.runManager);
+    this.maxConcurrent = Math.max(1, maxConcurrent);
   }
 
   async start(): Promise<void> {
@@ -33,7 +35,9 @@ export class Daemon {
 
     // Start polling
     this.pollInterval = setInterval(() => this.poll(), this.intervalMs);
-    console.log(`[daemon] Watching ${this.runManager.getRunsDir()} (poll every ${this.intervalMs}ms)`);
+    console.log(
+      `[daemon] Watching ${this.runManager.getRunsDir()} (poll every ${this.intervalMs}ms, maxConcurrent ${this.maxConcurrent})`
+    );
   }
 
   async stop(): Promise<void> {
@@ -48,6 +52,7 @@ export class Daemon {
     try {
       const runs = await this.runManager.listRuns();
       for (const run of runs) {
+        if (this.processing.size >= this.maxConcurrent) break;
         if (run.state !== 'created') continue;
         if (this.processing.has(run.run_id)) continue;
 

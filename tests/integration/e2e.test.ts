@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 
 const CLI = 'npx tsx src/cli/index.ts';
-const CWD = '/Volumes/DevWork/infra/openclaw-claude-bridge';
+const CWD = process.cwd();
 
 describe('E2E: codebridge CLI', () => {
   let workspaceDir: string;

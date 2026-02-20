@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { RunManager } from '../../core/run-manager.js';
+import { SessionManager } from '../../core/session-manager.js';
 import path from 'node:path';
 
 export function resumeCommand(): Command {
@@ -11,7 +12,11 @@ export function resumeCommand(): Command {
     .option('--runs-dir <path>', 'Runs directory', path.join(process.cwd(), '.runs'))
     .action(async (runId, opts) => {
       const runManager = new RunManager(opts.runsDir);
+      const sessionManager = new SessionManager(runManager);
       const session = await runManager.getStatus(runId);
+      if (!session.session_id) {
+        throw new Error(`Run ${runId} has no session_id and cannot be resumed`);
+      }
       const { writeFileSync, renameSync, readFileSync, existsSync } = await import('node:fs');
       const runDir = runManager.getRunDir(runId);
 
@@ -37,8 +42,8 @@ export function resumeCommand(): Command {
       writeFileSync(tmpPath, JSON.stringify(request, null, 2));
       renameSync(tmpPath, finalPath);
 
-      // Reset session state to 'created' so daemon can pick it up again
-      await runManager.updateSession(runId, { state: 'created' });
+      // Reset session state with state guard so running tasks cannot be resumed.
+      await sessionManager.resetForResume(runId);
 
       if (!opts.wait) {
         process.stdout.write(JSON.stringify({ run_id: runId, status: 'resume_queued', session_id: session.session_id }, null, 2) + '\n');
@@ -46,10 +51,8 @@ export function resumeCommand(): Command {
       }
 
       // --wait mode: process immediately
-      const { SessionManager } = await import('../../core/session-manager.js');
       const { ClaudeCodeEngine } = await import('../../engines/claude-code.js');
       const { TaskRunner } = await import('../../core/runner.js');
-      const sessionManager = new SessionManager(runManager);
       const engine = new ClaudeCodeEngine();
       const runner = new TaskRunner(runManager, sessionManager, engine);
       await runner.processRun(runId);

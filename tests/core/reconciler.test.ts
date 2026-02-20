@@ -148,4 +148,30 @@ describe('Reconciler', () => {
     const session = await runManager.getStatus(runId);
     expect(session.state).toBe('failed');
   });
+
+  it('treats corrupt result.json as orphaned and rewrites failed result', async () => {
+    const runId = await runManager.createRun({
+      task_id: 'task-006',
+      intent: 'coding' as const,
+      workspace_path: '/tmp/project',
+      message: 'Corrupt result',
+      engine: 'claude-code',
+      mode: 'new' as const,
+    });
+    await runManager.updateSession(runId, { state: 'running', pid: 99999 });
+    const resultPath = path.join(runsDir, runId, 'result.json');
+    fs.writeFileSync(resultPath, '{ invalid json');
+
+    const reconciler = new Reconciler(runManager);
+    const actions = await reconciler.reconcile();
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].action).toBe('marked_failed');
+    expect(actions[0].detail).toContain('missing/corrupt result.json');
+
+    const session = await runManager.getStatus(runId);
+    expect(session.state).toBe('failed');
+    const rewritten = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+    expect(rewritten.error.code).toBe('RUNNER_CRASH_RECOVERY');
+  });
 });

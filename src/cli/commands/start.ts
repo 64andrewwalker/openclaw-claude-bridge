@@ -6,12 +6,13 @@ export function startCommand(): Command {
     .description('Start the daemon runner (watches for new tasks)')
     .option('--runs-dir <path>', 'Runs directory', path.join(process.cwd(), '.runs'))
     .option('--poll-interval <ms>', 'Poll interval in milliseconds', '2000')
+    .option('--max-concurrent <n>', 'Maximum concurrent run executions', '4')
     .action(async (opts) => {
       const { Daemon } = await import('../../core/daemon.js');
       const { ClaudeCodeEngine } = await import('../../engines/claude-code.js');
 
       const engine = new ClaudeCodeEngine();
-      const daemon = new Daemon(opts.runsDir, engine, parseInt(opts.pollInterval));
+      const daemon = new Daemon(opts.runsDir, engine, parseInt(opts.pollInterval), parseInt(opts.maxConcurrent));
 
       process.on('SIGINT', async () => { await daemon.stop(); process.exit(0); });
       process.on('SIGTERM', async () => { await daemon.stop(); process.exit(0); });

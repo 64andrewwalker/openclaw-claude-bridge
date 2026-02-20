@@ -87,4 +87,38 @@ describe('Daemon', () => {
     const session = await runManager.getStatus(runId);
     expect(session.state).toBe('completed');
   });
+
+  it('respects maxConcurrent processing limit', async () => {
+    const engine = new ClaudeCodeEngine({
+      command: 'sh',
+      defaultArgs: ['-c', 'sleep 1; echo done'],
+    });
+    const daemon = new Daemon(runsDir, engine, 100, 2);
+    const runManager = new RunManager(runsDir);
+
+    await daemon.start();
+
+    for (let i = 0; i < 4; i++) {
+      await runManager.createRun({
+        task_id: `task-${i}`,
+        intent: 'coding',
+        workspace_path: workspaceDir,
+        message: `Task ${i}`,
+        engine: 'claude-code',
+        mode: 'new',
+      });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const runs = await runManager.listRuns();
+    const running = runs.filter((r) => r.state === 'running');
+    expect(running.length).toBeLessThanOrEqual(2);
+
+    await new Promise((resolve) => setTimeout(resolve, 2200));
+    await daemon.stop();
+
+    const finalRuns = await runManager.listRuns();
+    expect(finalRuns.every((r) => r.state === 'completed')).toBe(true);
+  });
 });
