@@ -96,13 +96,32 @@ describe('KimiCodeEngine', () => {
   });
 
   it('builds resume args with --session flag', async () => {
+    // Use node -e to echo all args as JSON. send() passes args directly to spawn.
     const engine = new KimiCodeEngine({
-      command: 'sh',
-      defaultArgs: ['-c', 'echo "$@"', '--'],
+      command: 'node',
     });
-    // send() always builds its own args regardless of defaultArgs
-    const result = await engine.send('sess-abc', 'follow up', { cwd: '/tmp/cb-test-project' });
-    expect(result.output).toContain('--session');
-    expect(result.output).toContain('sess-abc');
+    // Override: node -e script echoes argv. But send() builds its own args...
+    // The trick: use env var to pass a script, or use a shell wrapper.
+    // Simplest: sh -c 'printf "%s\n" "$@"' _ will print each arg on a line.
+    const echoEngine = new KimiCodeEngine({ command: 'sh' });
+    // send() will call: sh --print --output-format stream-json --session sess-abc -w /tmp/cb-test-project -p 'follow up'
+    // sh interprets --print as an error. Instead, we need /usr/bin/env printf or similar.
+    // Best: use a wrapper that ignores flags and prints all args.
+    // Actually the simplest way: write a tiny temp script.
+    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
+    const scriptPath = '/tmp/cb-echo-args.sh';
+    writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
+    chmodSync(scriptPath, 0o755);
+    try {
+      const testEngine = new KimiCodeEngine({ command: scriptPath });
+      const result = await testEngine.send('sess-abc', 'follow up', { cwd: '/tmp/cb-test-project' });
+      expect(result.output).toContain('--session');
+      expect(result.output).toContain('sess-abc');
+      expect(result.output).toContain('-w');
+      expect(result.output).toContain('-p');
+      expect(result.output).toContain('follow up');
+    } finally {
+      unlinkSync(scriptPath);
+    }
   });
 });
