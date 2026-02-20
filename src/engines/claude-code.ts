@@ -23,7 +23,7 @@ export class ClaudeCodeEngine implements Engine {
   }
 
   async send(sessionId: string, message: string, opts?: { timeoutMs?: number; cwd?: string }): Promise<EngineResponse> {
-    const args = ['--resume', sessionId, '--print', '--output-format', 'json', '-p', message];
+    const args = ['--resume', sessionId, ...this.permissionArgs(), '--print', '--output-format', 'json', '-p', message];
     return this.exec(args, opts?.timeoutMs ?? 1800000, opts?.cwd);
   }
 
@@ -33,7 +33,13 @@ export class ClaudeCodeEngine implements Engine {
 
   private buildStartArgs(task: TaskRequest): string[] {
     if (this.defaultArgs.length > 0) return [...this.defaultArgs];
-    return ['--print', '--output-format', 'json', '-p', task.message];
+    return [...this.permissionArgs(), '--print', '--output-format', 'json', '-p', task.message];
+  }
+
+  private permissionArgs(): string[] {
+    const permissionMode = process.env.CODEBRIDGE_CLAUDE_PERMISSION_MODE?.trim();
+    if (!permissionMode) return [];
+    return ['--permission-mode', permissionMode];
   }
 
   private exec(args: string[], timeoutMs: number, cwd?: string): Promise<EngineResponse> {
