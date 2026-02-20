@@ -9,6 +9,6 @@ export function resolveEngine(name: string): Engine {
     case 'kimi-code':
       return new KimiCodeEngine();
     default:
-      throw new Error(`Unknown engine: ${name}`);
+      throw new Error(`Unknown engine: ${String(name).slice(0, 64)}`);
   }
 }

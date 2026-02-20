@@ -60,30 +60,27 @@ export class KimiCodeEngine extends BaseEngine implements Engine {
     const trimmed = output.trim();
     if (!trimmed) return { text: '' };
 
-    try {
-      const parsed = JSON.parse(trimmed) as { role?: string; content?: Array<{ type: string; text?: string }> };
-      if (parsed.content && Array.isArray(parsed.content)) {
-        const textParts = parsed.content
-          .filter((c) => c.type === 'text' && typeof c.text === 'string')
-          .map((c) => c.text as string);
-        return { text: textParts.join('') };
-      }
-    } catch {
-      const lines = trimmed.split('\n').map((l) => l.trim()).filter(Boolean).reverse();
-      for (const line of lines) {
-        if (!line.startsWith('{') && !line.startsWith('[')) continue;
-        try {
-          const parsed = JSON.parse(line) as { content?: Array<{ type: string; text?: string }> };
-          if (parsed.content && Array.isArray(parsed.content)) {
-            const textParts = parsed.content
-              .filter((c) => c.type === 'text' && typeof c.text === 'string')
-              .map((c) => c.text as string);
-            return { text: textParts.join('') };
+    // Kimi's stream-json outputs NDJSON (one JSON per line).
+    // Collect text parts from ALL lines that contain content arrays.
+    const lines = trimmed.split('\n').map((l) => l.trim()).filter(Boolean);
+    const parts: string[] = [];
+    let foundContentArray = false;
+    for (const line of lines) {
+      if (!line.startsWith('{') && !line.startsWith('[')) continue;
+      try {
+        const parsed = JSON.parse(line) as { content?: Array<{ type: string; text?: string }> };
+        if (parsed.content && Array.isArray(parsed.content)) {
+          foundContentArray = true;
+          for (const c of parsed.content) {
+            if (c.type === 'text' && typeof c.text === 'string') parts.push(c.text);
           }
-        } catch { /* keep trying */ }
-      }
+        }
+      } catch { /* skip unparseable lines */ }
     }
 
+    // If we found content arrays, return collected text (may be empty if only think/tool parts).
+    // Only fall back to raw output when no Kimi JSON structure was found at all.
+    if (foundContentArray) return { text: parts.join('') };
     return { text: trimmed };
   }
 }

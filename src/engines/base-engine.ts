@@ -43,7 +43,7 @@ export abstract class BaseEngine {
           }
           outputOverflow = true;
           child.kill('SIGTERM');
-          setTimeout(() => child.kill('SIGKILL'), 1000);
+          setTimeout(() => child.kill('SIGKILL'), 3000);
           return;
         }
 

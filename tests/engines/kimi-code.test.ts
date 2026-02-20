@@ -128,6 +128,21 @@ describe('KimiCodeEngine', () => {
     expect(result.output).toContain('no content field');
   });
 
+  it('collects text from multiple NDJSON lines (multi-turn tool use)', async () => {
+    // Simulate Kimi's stream-json with multiple assistant messages (tool use scenario)
+    const ndjson = [
+      '{"role":"assistant","content":[{"type":"text","text":"Let me check. "}]}',
+      '{"role":"tool","tool_call_id":"call-1","content":"file.txt exists"}',
+      '{"role":"assistant","content":[{"type":"text","text":"The file exists."}]}',
+    ].join('\\n');
+    const engine = new KimiCodeEngine({
+      command: 'sh',
+      defaultArgs: ['-c', `printf '${ndjson}\\n'`],
+    });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('Let me check. The file exists.');
+  });
+
   it('parses trailing JSON after non-JSON log lines', async () => {
     const engine = new KimiCodeEngine({
       command: 'sh',
