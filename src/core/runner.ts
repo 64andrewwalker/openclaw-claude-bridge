@@ -1,8 +1,10 @@
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { RunManager } from './run-manager.js';
 import type { SessionManager } from './session-manager.js';
 import type { Engine } from './engine.js';
 import { makeError } from '../schemas/errors.js';
+import { validateRequest } from '../schemas/request.js';
 
 export class TaskRunner {
   constructor(
@@ -18,6 +20,26 @@ export class TaskRunner {
     if (!request) {
       await this.fail(runId, startTime, makeError('REQUEST_INVALID', 'No request.json found'));
       return;
+    }
+
+    // Validate request against schema
+    const validation = validateRequest(request);
+    if (!validation.success) {
+      await this.fail(runId, startTime, makeError('REQUEST_INVALID', validation.error.message));
+      return;
+    }
+
+    // Security: resolve workspace and check against allowed_roots
+    const resolvedWorkspace = path.resolve(request.workspace_path);
+    if (request.allowed_roots && request.allowed_roots.length > 0) {
+      const isAllowed = request.allowed_roots.some(root =>
+        resolvedWorkspace.startsWith(path.resolve(root))
+      );
+      if (!isAllowed) {
+        await this.fail(runId, startTime, makeError('WORKSPACE_INVALID',
+          `Workspace ${resolvedWorkspace} is outside allowed roots: ${request.allowed_roots.join(', ')}`));
+        return;
+      }
     }
 
     // Validate workspace exists and is a directory

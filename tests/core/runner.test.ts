@@ -66,6 +66,52 @@ describe('TaskRunner', () => {
     expect(result.error.retryable).toBe(true);
   });
 
+  it('rejects request with workspace outside allowed_roots', async () => {
+    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const runId = await runManager.createRun({
+      task_id: 'task-sec', intent: 'coding', workspace_path: workspaceDir,
+      message: 'Test', engine: 'claude-code', mode: 'new',
+      allowed_roots: ['/some/other/path'],
+    });
+    await runner.processRun(runId);
+    const session = await sessionManager.getSession(runId);
+    expect(session.state).toBe('failed');
+    const resultPath = path.join(runsDir, runId, 'result.json');
+    const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+    expect(result.error.code).toBe('WORKSPACE_INVALID');
+  });
+
+  it('rejects path traversal attempts', async () => {
+    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const runId = await runManager.createRun({
+      task_id: 'task-traversal', intent: 'coding',
+      workspace_path: path.join(workspaceDir, '..', '..', 'etc'),
+      message: 'Traversal', engine: 'claude-code', mode: 'new',
+      allowed_roots: [workspaceDir],
+    });
+    await runner.processRun(runId);
+    const resultPath = path.join(runsDir, runId, 'result.json');
+    const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+    expect(result.error.code).toBe('WORKSPACE_INVALID');
+  });
+
+  it('allows workspace within allowed_roots', async () => {
+    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['secure ok'] });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const subDir = path.join(workspaceDir, 'subproject');
+    fs.mkdirSync(subDir);
+    const runId = await runManager.createRun({
+      task_id: 'task-ok', intent: 'coding', workspace_path: subDir,
+      message: 'OK', engine: 'claude-code', mode: 'new',
+      allowed_roots: [workspaceDir],
+    });
+    await runner.processRun(runId);
+    const session = await sessionManager.getSession(runId);
+    expect(session.state).toBe('completed');
+  });
+
   it('rejects non-existent workspace without invoking engine', async () => {
     const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
     const runner = new TaskRunner(runManager, sessionManager, engine);
