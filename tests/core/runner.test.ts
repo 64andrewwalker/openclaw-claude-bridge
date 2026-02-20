@@ -83,18 +83,25 @@ describe('TaskRunner', () => {
   });
 
   it('rejects path traversal attempts', async () => {
-    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
-    const runner = new TaskRunner(runManager, sessionManager, engine);
-    const runId = await runManager.createRun({
-      task_id: 'task-traversal', intent: 'coding',
-      workspace_path: path.join(workspaceDir, '..', '..', 'etc'),
-      message: 'Traversal', engine: 'claude-code', mode: 'new',
-      allowed_roots: [workspaceDir],
-    });
-    await runner.processRun(runId);
-    const resultPath = path.join(runsDir, runId, 'result.json');
-    const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
-    expect(result.error.code).toBe('WORKSPACE_INVALID');
+    // Use a sibling of workspaceDir to escape allowed_roots without hitting DANGEROUS_ROOTS
+    const siblingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codebridge-sibling-'));
+    try {
+      const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
+      const runner = new TaskRunner(runManager, sessionManager, engine);
+      const traversalPath = path.join(workspaceDir, '..', path.basename(siblingDir));
+      const runId = await runManager.createRun({
+        task_id: 'task-traversal', intent: 'coding',
+        workspace_path: traversalPath,
+        message: 'Traversal', engine: 'claude-code', mode: 'new',
+        allowed_roots: [workspaceDir],
+      });
+      await runner.processRun(runId);
+      const resultPath = path.join(runsDir, runId, 'result.json');
+      const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+      expect(result.error.code).toBe('WORKSPACE_INVALID');
+    } finally {
+      fs.rmSync(siblingDir, { recursive: true, force: true });
+    }
   });
 
   it('allows workspace within allowed_roots', async () => {

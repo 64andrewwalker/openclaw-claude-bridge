@@ -94,4 +94,14 @@ describe('RequestSchema', () => {
     const result = validateRequest(input);
     expect(result.success).toBe(false);
   });
+
+  it('rejects traversal paths that resolve to dangerous roots', () => {
+    const input = { ...validBase, workspace_path: '/home/user/../../etc' };
+    const result = validateRequest(input);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(messages).toContain('Workspace path is a disallowed root path');
+    }
+  });
 });
