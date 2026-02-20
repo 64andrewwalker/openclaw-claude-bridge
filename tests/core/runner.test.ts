@@ -104,6 +104,21 @@ describe('TaskRunner', () => {
     }
   });
 
+  it('rejects filesystem root as allowed_root', async () => {
+    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const runId = await runManager.createRun({
+      task_id: 'task-fsroot', intent: 'coding', workspace_path: workspaceDir,
+      message: 'Root escape', engine: 'claude-code', mode: 'new',
+      allowed_roots: ['/'],
+    });
+    await runner.processRun(runId);
+    const resultPath = path.join(runsDir, runId, 'result.json');
+    const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+    expect(result.error.code).toBe('WORKSPACE_INVALID');
+    expect(result.error.message).toContain('not permitted');
+  });
+
   it('rejects sibling-prefix path that shares allowed_root prefix', async () => {
     // /tmp/codebridge-workspace-xxx-evil should NOT match root /tmp/codebridge-workspace-xxx
     const evilDir = fs.mkdtempSync(workspaceDir + '-evil');
