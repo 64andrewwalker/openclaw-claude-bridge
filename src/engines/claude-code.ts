@@ -23,7 +23,7 @@ export class ClaudeCodeEngine implements Engine {
   }
 
   async send(sessionId: string, message: string, opts?: { timeoutMs?: number; cwd?: string }): Promise<EngineResponse> {
-    const args = ['--resume', sessionId, '--print', '-p', message];
+    const args = ['--resume', sessionId, '--print', '--output-format', 'json', '-p', message];
     return this.exec(args, opts?.timeoutMs ?? 1800000, opts?.cwd);
   }
 
@@ -33,14 +33,16 @@ export class ClaudeCodeEngine implements Engine {
 
   private buildStartArgs(task: TaskRequest): string[] {
     if (this.defaultArgs.length > 0) return [...this.defaultArgs];
-    return ['--print', '-p', task.message];
+    return ['--print', '--output-format', 'json', '-p', task.message];
   }
 
   private exec(args: string[], timeoutMs: number, cwd?: string): Promise<EngineResponse> {
     return new Promise((resolve) => {
       const child = spawn(this.command, args, {
         cwd: cwd || process.cwd(),
-        stdio: ['pipe', 'pipe', 'pipe'],
+        // Keep stdout/stderr piped for parsing, but close stdin so Claude CLI
+        // does not wait for additional input in non-interactive execution.
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
 
       let stdout = '';
@@ -58,6 +60,7 @@ export class ClaudeCodeEngine implements Engine {
 
       child.on('close', (code) => {
         clearTimeout(timer);
+        const parsed = this.parseClaudeJson(stdout);
         if (timedOut) {
           resolve({ output: stdout, pid: child.pid ?? 0, exitCode: code, sessionId: null, error: makeError('ENGINE_TIMEOUT', `Process killed after ${timeoutMs}ms`) });
           return;
@@ -66,7 +69,13 @@ export class ClaudeCodeEngine implements Engine {
           resolve({ output: stdout, pid: child.pid ?? 0, exitCode: code, sessionId: null, error: makeError('ENGINE_CRASH', stderr || `Process exited with code ${code}`) });
           return;
         }
-        resolve({ output: stdout.trim(), pid: child.pid ?? 0, exitCode: 0, sessionId: this.extractSessionId(stderr + stdout), tokenUsage: this.extractTokenUsage(stderr + stdout) });
+        resolve({
+          output: typeof parsed?.result === 'string' ? parsed.result : stdout.trim(),
+          pid: child.pid ?? 0,
+          exitCode: 0,
+          sessionId: this.extractSessionId(parsed, stderr + stdout),
+          tokenUsage: this.extractTokenUsage(parsed),
+        });
       });
 
       child.on('error', (err) => {
@@ -76,12 +85,42 @@ export class ClaudeCodeEngine implements Engine {
     });
   }
 
-  private extractSessionId(output: string): string | null {
-    const match = output.match(/"session_id"\s*:\s*"([^"]+)"/);
+  private parseClaudeJson(output: string): Record<string, unknown> | null {
+    const trimmed = output.trim();
+    if (!trimmed) return null;
+
+    try {
+      return JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      // Some environments may prepend warnings/logs. Try the last JSON line.
+      const lines = trimmed.split('\n').map((l) => l.trim()).filter(Boolean).reverse();
+      for (const line of lines) {
+        if (!line.startsWith('{')) continue;
+        try {
+          return JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          // Keep trying.
+        }
+      }
+      return null;
+    }
+  }
+
+  private extractSessionId(parsed: Record<string, unknown> | null, rawOutput: string): string | null {
+    if (typeof parsed?.session_id === 'string') return parsed.session_id;
+    const match = rawOutput.match(/"session_id"\s*:\s*"([^"]+)"/);
     return match?.[1] ?? null;
   }
 
-  private extractTokenUsage(_output: string): { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null {
-    return null;
+  private extractTokenUsage(parsed: Record<string, unknown> | null): { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null {
+    const usage = parsed?.usage as Record<string, unknown> | undefined;
+    const input = usage?.input_tokens;
+    const output = usage?.output_tokens;
+    if (typeof input !== 'number' || typeof output !== 'number') return null;
+    return {
+      prompt_tokens: input,
+      completion_tokens: output,
+      total_tokens: input + output,
+    };
   }
 }

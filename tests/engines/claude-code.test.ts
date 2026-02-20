@@ -28,6 +28,19 @@ describe('ClaudeCodeEngine', () => {
     expect(result.error).toBeUndefined();
   });
 
+  it('parses JSON output for result text, session_id, and token usage', async () => {
+    const payload = '{"result":"json ok","session_id":"sess-123","usage":{"input_tokens":12,"output_tokens":3}}';
+    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: [payload] });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('json ok');
+    expect(result.sessionId).toBe('sess-123');
+    expect(result.tokenUsage).toEqual({
+      prompt_tokens: 12,
+      completion_tokens: 3,
+      total_tokens: 15,
+    });
+  });
+
   it('returns ENGINE_CRASH on non-zero exit code', async () => {
     const engine = new ClaudeCodeEngine({ command: 'false' });
     const result = await engine.start(makeRequest());
