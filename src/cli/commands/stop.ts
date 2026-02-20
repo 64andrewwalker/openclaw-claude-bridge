@@ -3,6 +3,7 @@ import { RunManager } from '../../core/run-manager.js';
 import { SessionManager } from '../../core/session-manager.js';
 import path from 'node:path';
 import { isProcessAlive } from '../../utils/process.js';
+import { makeError } from '../../schemas/errors.js';
 
 function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -56,11 +57,7 @@ export function stopCommand(): Command {
         artifacts: [],
         duration_ms: 0,
         token_usage: null,
-        error: {
-          code: 'TASK_STOPPED',
-          message: stopped ? 'Task force-stopped by user' : 'Task stop requested but process did not exit cleanly',
-          retryable: false,
-        },
+        error: makeError('TASK_STOPPED', stopped ? undefined : 'Task stop requested but process did not exit cleanly'),
       });
 
       process.stdout.write(JSON.stringify({ run_id: runId, status: 'stopped' }, null, 2) + '\n');
