@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 import type { Engine, EngineResponse } from '../core/engine.js';
 import type { TaskRequest } from '../schemas/request.js';
 import { makeError } from '../schemas/errors.js';
@@ -44,8 +45,21 @@ export class ClaudeCodeEngine implements Engine {
 
   private exec(args: string[], timeoutMs: number, cwd?: string): Promise<EngineResponse> {
     return new Promise((resolve) => {
+      const extraBins = [
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/usr/bin',
+      ];
+      const home = process.env.HOME;
+      if (home) {
+        extraBins.push(path.join(home, '.local', 'bin'));
+        extraBins.push(path.join(home, '.npm-global', 'bin'));
+      }
+      const mergedPath = [...new Set([...extraBins, ...(process.env.PATH ?? '').split(':').filter(Boolean)])].join(':');
+
       const child = spawn(this.command, args, {
         cwd: cwd || process.cwd(),
+        env: { ...process.env, PATH: mergedPath },
         // Keep stdout/stderr piped for parsing, but close stdin so Claude CLI
         // does not wait for additional input in non-interactive execution.
         stdio: ['ignore', 'pipe', 'pipe'],

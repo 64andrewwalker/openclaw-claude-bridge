@@ -13,11 +13,27 @@ export function doctorCommand(): Command {
       const checks: Check[] = [];
       const nodeVersion = process.version;
       checks.push({ name: 'Node.js', status: parseInt(nodeVersion.slice(1)) >= 18 ? 'ok' : 'warn', detail: nodeVersion });
+
+      const extraBins = [
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/usr/bin',
+      ];
+      const home = process.env.HOME;
+      if (home) {
+        extraBins.push(path.join(home, '.local', 'bin'));
+        extraBins.push(path.join(home, '.npm-global', 'bin'));
+      }
+      const mergedPath = [...new Set([...extraBins, ...(process.env.PATH ?? '').split(':').filter(Boolean)])].join(':');
+
       try {
-        const claudeVersion = execSync('claude --version 2>/dev/null', { encoding: 'utf-8' }).trim();
+        const claudeVersion = execSync('claude --version 2>/dev/null', {
+          encoding: 'utf-8',
+          env: { ...process.env, PATH: mergedPath },
+        }).trim();
         checks.push({ name: 'Claude CLI', status: 'ok', detail: claudeVersion });
       } catch {
-        checks.push({ name: 'Claude CLI', status: 'fail', detail: 'Not found in PATH' });
+        checks.push({ name: 'Claude CLI', status: 'fail', detail: 'Not found in PATH (or common bin paths)' });
       }
       try {
         if (existsSync(opts.runsDir)) {
