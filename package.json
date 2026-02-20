@@ -1,8 +1,11 @@
 {
-  "name": "openclaw-claude-bridge",
-  "version": "1.0.0",
-  "description": "File-driven bridge that lets OpenClaw delegate hard coding/ops tasks to Claude Code CLI through a compliant, auditable workflow.",
-  "main": "index.js",
+  "name": "codebridge",
+  "version": "0.1.0",
+  "description": "CLI bridge for delegating coding tasks to AI engines (Claude Code, Codex, OpenCode)",
+  "main": "dist/index.js",
+  "bin": {
+    "codebridge": "dist/cli/index.js"
+  },
   "directories": {
     "doc": "docs"
   },
