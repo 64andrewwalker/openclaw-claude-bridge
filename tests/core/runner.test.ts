@@ -104,6 +104,41 @@ describe('TaskRunner', () => {
     }
   });
 
+  it('rejects filesystem root as allowed_root', async () => {
+    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const runId = await runManager.createRun({
+      task_id: 'task-fsroot', intent: 'coding', workspace_path: workspaceDir,
+      message: 'Root escape', engine: 'claude-code', mode: 'new',
+      allowed_roots: ['/'],
+    });
+    await runner.processRun(runId);
+    const resultPath = path.join(runsDir, runId, 'result.json');
+    const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+    expect(result.error.code).toBe('WORKSPACE_INVALID');
+    expect(result.error.message).toContain('not permitted');
+  });
+
+  it('rejects sibling-prefix path that shares allowed_root prefix', async () => {
+    const evilDir = fs.mkdtempSync(workspaceDir + '-evil');
+    try {
+      const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['should not run'] });
+      const runner = new TaskRunner(runManager, sessionManager, engine);
+      const runId = await runManager.createRun({
+        task_id: 'task-sibling', intent: 'coding',
+        workspace_path: evilDir,
+        message: 'Sibling prefix', engine: 'claude-code', mode: 'new',
+        allowed_roots: [workspaceDir],
+      });
+      await runner.processRun(runId);
+      const resultPath = path.join(runsDir, runId, 'result.json');
+      const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+      expect(result.error.code).toBe('WORKSPACE_INVALID');
+    } finally {
+      fs.rmSync(evilDir, { recursive: true, force: true });
+    }
+  });
+
   it('allows workspace within allowed_roots', async () => {
     const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['secure ok'] });
     const runner = new TaskRunner(runManager, sessionManager, engine);
