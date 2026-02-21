@@ -145,7 +145,8 @@ function getFilesChanged(cwd: string): string[] | null {
   try {
     const modified = execSync('git diff --name-only HEAD', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
     const untracked = execSync('git ls-files --others --exclude-standard', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-    const all = [...modified.split('\n'), ...untracked.split('\n')].filter(Boolean);
+    const all = [...modified.split('\n'), ...untracked.split('\n')]
+      .filter(f => f && !f.startsWith('.runs/'));
     return [...new Set(all)];
   } catch {
     return null;
