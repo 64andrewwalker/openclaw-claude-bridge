@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3](https://github.com/64andrewwalker/codebridge/compare/codebridge-v0.1.2...codebridge-v0.1.3) (2026-02-21)
+
+
+### Features
+
+* store full engine output in output.txt ([#15](https://github.com/64andrewwalker/codebridge/issues/15)) ([#16](https://github.com/64andrewwalker/codebridge/issues/16)) ([f404379](https://github.com/64andrewwalker/codebridge/commit/f4043796943e6867193b27ab1720e068539ec045))
+
+
+### Bug Fixes
+
+* guard writeOutputFile and add explicit failure path fields ([#15](https://github.com/64andrewwalker/codebridge/issues/15)) ([#18](https://github.com/64andrewwalker/codebridge/issues/18)) ([d45a258](https://github.com/64andrewwalker/codebridge/commit/d45a258955530cc26ac6f17c61e1933870dfbd2c))
+
 ## [0.1.2](https://github.com/64andrewwalker/codebridge/compare/codebridge-v0.1.1...codebridge-v0.1.2) (2026-02-21)
 
 
