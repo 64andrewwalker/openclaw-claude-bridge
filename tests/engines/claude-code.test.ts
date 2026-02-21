@@ -1,39 +1,46 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { mkdirSync } from 'node:fs';
-import { ClaudeCodeEngine } from '../../src/engines/claude-code.js';
-import type { TaskRequest } from '../../src/schemas/request.js';
+import { describe, it, expect, beforeAll } from "vitest";
+import { mkdirSync } from "node:fs";
+import { ClaudeCodeEngine } from "../../src/engines/claude-code.js";
+import type { TaskRequest } from "../../src/schemas/request.js";
 
-describe('ClaudeCodeEngine', () => {
+describe("ClaudeCodeEngine", () => {
   beforeAll(() => {
-    mkdirSync('/tmp/cb-test-project', { recursive: true });
+    mkdirSync("/tmp/cb-test-project", { recursive: true });
   });
 
   const makeRequest = (overrides?: Partial<TaskRequest>): TaskRequest => ({
-    task_id: 'task-001',
-    intent: 'coding',
-    workspace_path: '/tmp/cb-test-project',
-    message: 'Hello world',
-    engine: 'claude-code',
-    mode: 'new',
+    task_id: "task-001",
+    intent: "coding",
+    workspace_path: "/tmp/cb-test-project",
+    message: "Hello world",
+    engine: "claude-code",
+    mode: "new",
     session_id: null,
     constraints: { timeout_ms: 30000, allow_network: true },
     ...overrides,
   });
 
-  it('starts a new session and returns pid and output', async () => {
-    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['hello from engine'] });
+  it("starts a new session and returns pid and output", async () => {
+    const engine = new ClaudeCodeEngine({
+      command: "echo",
+      defaultArgs: ["hello from engine"],
+    });
     const result = await engine.start(makeRequest());
-    expect(result.pid).toBeTypeOf('number');
-    expect(result.output).toContain('hello from engine');
+    expect(result.pid).toBeTypeOf("number");
+    expect(result.output).toContain("hello from engine");
     expect(result.error).toBeUndefined();
   });
 
-  it('parses JSON output for result text, session_id, and token usage', async () => {
-    const payload = '{"result":"json ok","session_id":"sess-123","usage":{"input_tokens":12,"output_tokens":3}}';
-    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: [payload] });
+  it("parses JSON output for result text, session_id, and token usage", async () => {
+    const payload =
+      '{"result":"json ok","session_id":"sess-123","usage":{"input_tokens":12,"output_tokens":3}}';
+    const engine = new ClaudeCodeEngine({
+      command: "echo",
+      defaultArgs: [payload],
+    });
     const result = await engine.start(makeRequest());
-    expect(result.output).toBe('json ok');
-    expect(result.sessionId).toBe('sess-123');
+    expect(result.output).toBe("json ok");
+    expect(result.sessionId).toBe("sess-123");
     expect(result.tokenUsage).toEqual({
       prompt_tokens: 12,
       completion_tokens: 3,
@@ -41,82 +48,141 @@ describe('ClaudeCodeEngine', () => {
     });
   });
 
-  it('parses trailing JSON after non-JSON log lines', async () => {
+  it("parses trailing JSON after non-JSON log lines", async () => {
     const engine = new ClaudeCodeEngine({
-      command: 'sh',
-      defaultArgs: ['-c', `printf 'WARN: preface\\n{"result":"tail json","session_id":"sess-tail","usage":{"input_tokens":1,"output_tokens":2}}\\n'`],
+      command: "sh",
+      defaultArgs: [
+        "-c",
+        `printf 'WARN: preface\\n{"result":"tail json","session_id":"sess-tail","usage":{"input_tokens":1,"output_tokens":2}}\\n'`,
+      ],
     });
     const result = await engine.start(makeRequest());
-    expect(result.output).toBe('tail json');
-    expect(result.sessionId).toBe('sess-tail');
+    expect(result.output).toBe("tail json");
+    expect(result.sessionId).toBe("sess-tail");
     expect(result.tokenUsage?.total_tokens).toBe(3);
   });
 
-  it('returns ENGINE_CRASH on non-zero exit code', async () => {
-    const engine = new ClaudeCodeEngine({ command: 'false' });
+  it("returns ENGINE_CRASH on non-zero exit code", async () => {
+    const engine = new ClaudeCodeEngine({ command: "false" });
     const result = await engine.start(makeRequest());
     expect(result.error).toBeDefined();
-    expect(result.error?.code).toBe('ENGINE_CRASH');
+    expect(result.error?.code).toBe("ENGINE_CRASH");
     expect(result.error?.retryable).toBe(true);
   });
 
-  it('kills process on timeout and returns ENGINE_TIMEOUT', async () => {
-    const engine = new ClaudeCodeEngine({ command: 'sleep', defaultArgs: ['10'] });
-    const result = await engine.start(makeRequest({ constraints: { timeout_ms: 500, allow_network: true } }));
+  it("kills process on timeout and returns ENGINE_TIMEOUT", async () => {
+    const engine = new ClaudeCodeEngine({
+      command: "sleep",
+      defaultArgs: ["10"],
+    });
+    const result = await engine.start(
+      makeRequest({ constraints: { timeout_ms: 500, allow_network: true } }),
+    );
     expect(result.error).toBeDefined();
-    expect(result.error?.code).toBe('ENGINE_TIMEOUT');
+    expect(result.error?.code).toBe("ENGINE_TIMEOUT");
     expect(result.error?.retryable).toBe(true);
   }, 10000);
 
-  it('handles command not found error', async () => {
-    const engine = new ClaudeCodeEngine({ command: 'nonexistent-command-xyz' });
+  it("handles command not found error", async () => {
+    const engine = new ClaudeCodeEngine({ command: "nonexistent-command-xyz" });
     const result = await engine.start(makeRequest());
     expect(result.error).toBeDefined();
-    expect(result.error?.code).toBe('ENGINE_CRASH');
+    expect(result.error?.code).toBe("ENGINE_CRASH");
   });
 
-  it('stop() does not throw for non-existent pid', async () => {
+  it("stop() does not throw for non-existent pid", async () => {
     const engine = new ClaudeCodeEngine();
     await expect(engine.stop(999999)).resolves.not.toThrow();
   });
 
-  it('includes --model flag when model is specified', async () => {
-    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
-    const scriptPath = '/tmp/cb-claude-model.sh';
+  it("includes --model flag when model is specified", async () => {
+    const { writeFileSync, unlinkSync, chmodSync } = await import("node:fs");
+    const scriptPath = "/tmp/cb-claude-model.sh";
     writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
     chmodSync(scriptPath, 0o755);
     try {
       const engine = new ClaudeCodeEngine({ command: scriptPath });
-      const result = await engine.start(makeRequest({ model: 'opus' }));
-      expect(result.output).toContain('--model');
-      expect(result.output).toContain('opus');
+      const result = await engine.start(makeRequest({ model: "opus" }));
+      expect(result.output).toContain("--model");
+      expect(result.output).toContain("opus");
     } finally {
       unlinkSync(scriptPath);
     }
   });
 
-  it('does not include --model flag when model is not specified', async () => {
-    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
-    const scriptPath = '/tmp/cb-claude-no-model.sh';
+  it("does not include --model flag when model is not specified", async () => {
+    const { writeFileSync, unlinkSync, chmodSync } = await import("node:fs");
+    const scriptPath = "/tmp/cb-claude-no-model.sh";
     writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
     chmodSync(scriptPath, 0o755);
     try {
       const engine = new ClaudeCodeEngine({ command: scriptPath });
       const result = await engine.start(makeRequest());
-      expect(result.output).not.toContain('--model');
+      expect(result.output).not.toContain("--model");
     } finally {
       unlinkSync(scriptPath);
     }
   });
 
-  it('caps oversized output and returns ENGINE_CRASH', async () => {
+  it("caps oversized output and returns ENGINE_CRASH", async () => {
     const bytes = 11 * 1024 * 1024; // > 10MB cap
     const engine = new ClaudeCodeEngine({
-      command: 'node',
-      defaultArgs: ['-e', `process.stdout.write('x'.repeat(${bytes}))`],
+      command: "node",
+      defaultArgs: ["-e", `process.stdout.write('x'.repeat(${bytes}))`],
     });
-    const result = await engine.start(makeRequest({ constraints: { timeout_ms: 30000, allow_network: true } }));
-    expect(result.error?.code).toBe('ENGINE_CRASH');
-    expect(result.error?.message).toContain('exceeded');
+    const result = await engine.start(
+      makeRequest({ constraints: { timeout_ms: 30000, allow_network: true } }),
+    );
+    expect(result.error?.code).toBe("ENGINE_CRASH");
+    expect(result.error?.message).toContain("exceeded");
   }, 15000);
+
+  // Bug 3: negative token counts must be rejected
+  it("returns null tokenUsage when input_tokens is negative", async () => {
+    const payload =
+      '{"result":"ok","session_id":"sess-neg","usage":{"input_tokens":-10,"output_tokens":5}}';
+    const engine = new ClaudeCodeEngine({
+      command: "echo",
+      defaultArgs: [payload],
+    });
+    const result = await engine.start(makeRequest());
+    expect(result.tokenUsage).toBeNull();
+  });
+
+  it("returns null tokenUsage when output_tokens is negative", async () => {
+    const payload =
+      '{"result":"ok","session_id":"sess-neg","usage":{"input_tokens":10,"output_tokens":-5}}';
+    const engine = new ClaudeCodeEngine({
+      command: "echo",
+      defaultArgs: [payload],
+    });
+    const result = await engine.start(makeRequest());
+    expect(result.tokenUsage).toBeNull();
+  });
+
+  it("returns null tokenUsage when both token counts are negative", async () => {
+    const payload =
+      '{"result":"ok","session_id":"sess-neg","usage":{"input_tokens":-10,"output_tokens":-5}}';
+    const engine = new ClaudeCodeEngine({
+      command: "echo",
+      defaultArgs: [payload],
+    });
+    const result = await engine.start(makeRequest());
+    expect(result.tokenUsage).toBeNull();
+  });
+
+  it("accepts zero token counts as valid", async () => {
+    const payload =
+      '{"result":"ok","session_id":"sess-zero","usage":{"input_tokens":0,"output_tokens":0}}';
+    const engine = new ClaudeCodeEngine({
+      command: "echo",
+      defaultArgs: [payload],
+    });
+    const result = await engine.start(makeRequest());
+    expect(result.tokenUsage).toEqual({
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+    });
+  });
 });
