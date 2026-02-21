@@ -1,6 +1,6 @@
 {
   "name": "codebridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI bridge for delegating coding tasks to AI engines (Claude Code, Codex, OpenCode)",
   "main": "dist/cli/index.js",
   "bin": {
