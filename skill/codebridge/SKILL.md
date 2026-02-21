@@ -12,7 +12,7 @@ You can delegate complex, multi-file coding tasks to a separate AI coding engine
 | Engine | Session Resume | Token Tracking | Model Selection |
 |--------|---------------|----------------|-----------------|
 | `claude-code` | yes | yes | `--model opus`, `--model claude-sonnet-4-6` |
-| `kimi-code` | yes | no | `--model k2p5` |
+| `kimi-code` | no | no | `--model k2p5` |
 | `opencode` | yes | yes | `--model pawpaw/claude-sonnet-4-5` |
 | `codex` | yes | no | `--model gpt-5.3-codex` |
 
@@ -128,6 +128,7 @@ codebridge status <run_id>
 | ENGINE_TIMEOUT | yes | Increase --timeout or simplify the task |
 | ENGINE_CRASH | yes | Retry the task |
 | ENGINE_AUTH | no | Check engine credentials |
+| NETWORK_ERROR | yes | Check network connectivity and retry |
 | WORKSPACE_NOT_FOUND | no | Verify workspace path exists |
 | WORKSPACE_INVALID | no | Use a permitted directory |
 | REQUEST_INVALID | no | Fix intent/engine/workspace fields |

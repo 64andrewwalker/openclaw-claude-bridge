@@ -99,7 +99,7 @@ codebridge resume <run_id> --message "Follow up" --wait
 | Engine | Model Example | Session Resume | Token Tracking |
 |--------|--------------|----------------|----------------|
 | \`claude-code\` | \`--model opus\` | yes | yes |
-| \`kimi-code\` | \`--model k2p5\` | yes | no |
+| \`kimi-code\` | \`--model k2p5\` | no | no |
 | \`opencode\` | \`--model pawpaw/claude-sonnet-4-5\` | yes | yes |
 | \`codex\` | \`--model gpt-5.3-codex\` | yes | no |
 `;
