@@ -71,10 +71,20 @@ codebridge submit \\
   --workspace /path/to/project \\
   --message "Implement feature X" \\
   --engine claude-code \\
+  --model opus \\
   --wait \\
   --timeout 120000
 
-# Check environment
+# Submit with a different engine
+codebridge submit \\
+  --intent coding \\
+  --workspace /path/to/project \\
+  --message "Implement feature X" \\
+  --engine opencode \\
+  --model pawpaw/claude-sonnet-4-5 \\
+  --wait
+
+# Check which engines are installed
 codebridge doctor
 
 # View task status
@@ -86,10 +96,12 @@ codebridge resume <run_id> --message "Follow up" --wait
 
 ## Available Engines
 
-- \`claude-code\` — Claude Code CLI
-- \`kimi-code\` — Kimi Code CLI
-- \`opencode\` — OpenCode CLI
-- \`codex\` — OpenAI Codex CLI
+| Engine | Model Example | Session Resume | Token Tracking |
+|--------|--------------|----------------|----------------|
+| \`claude-code\` | \`--model opus\` | yes | yes |
+| \`kimi-code\` | \`--model k2p5\` | yes | no |
+| \`opencode\` | \`--model pawpaw/claude-sonnet-4-5\` | yes | yes |
+| \`codex\` | \`--model gpt-5.3-codex\` | yes | no |
 `;
 
       const outputPath = '/tmp/codebridge-install.md';
