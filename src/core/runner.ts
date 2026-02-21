@@ -50,21 +50,28 @@ export class TaskRunner {
         return;
       }
 
-      // Security: resolve workspace and check against allowed_roots
-      // Use realpathSync to follow symlinks — path.resolve() only resolves the
-      // string path and does NOT follow symlinks on disk.
+      // Security: resolve workspace via realpathSync (follows symlinks) before
+      // checking against allowed_roots.  Fall back to a WORKSPACE_NOT_FOUND
+      // failure for paths that don't exist yet (realpathSync requires existence).
       let resolvedWorkspace: string;
       try {
         resolvedWorkspace = fs.realpathSync(request.workspace_path);
       } catch {
-        // realpathSync throws if the path doesn't exist; fall through to the
-        // WORKSPACE_NOT_FOUND check below using the string-resolved path.
-        resolvedWorkspace = path.resolve(request.workspace_path);
+        await this.fail(
+          runId,
+          startTime,
+          makeError(
+            "WORKSPACE_NOT_FOUND",
+            `Workspace not found: ${request.workspace_path}`,
+          ),
+        );
+        return;
       }
 
       if (request.allowed_roots && request.allowed_roots.length > 0) {
-        // Resolve allowed_roots using realpathSync (where the path exists) so
-        // the comparison is consistent with the symlink-resolved workspace path.
+        // Use realpathSync for roots too so symlinks in allowed_roots are resolved
+        // consistently with the workspace resolution above. Fall back to
+        // path.resolve for any root that does not exist on disk yet.
         const resolvedRoots = request.allowed_roots.map((r) => {
           try {
             return fs.realpathSync(r);
@@ -102,17 +109,14 @@ export class TaskRunner {
         }
       }
 
-      // Validate workspace exists and is a directory
-      if (
-        !fs.existsSync(request.workspace_path) ||
-        !fs.statSync(request.workspace_path).isDirectory()
-      ) {
+      // Validate workspace is a directory (realpathSync already verified existence above)
+      if (!fs.statSync(resolvedWorkspace).isDirectory()) {
         await this.fail(
           runId,
           startTime,
           makeError(
             "WORKSPACE_NOT_FOUND",
-            `Workspace not found: ${request.workspace_path}`,
+            `Workspace is not a directory: ${request.workspace_path}`,
           ),
         );
         return;
@@ -159,6 +163,8 @@ export class TaskRunner {
         });
       }
 
+      const durationMs = Date.now() - startTime;
+
       if (engineResponse.error) {
         await this.fail(runId, startTime, engineResponse.error, engineResponse);
         return;
@@ -168,9 +174,7 @@ export class TaskRunner {
       const SUMMARY_LIMIT = 4000;
       const output = engineResponse.output;
       const summaryTruncated = output.length > SUMMARY_LIMIT;
-      const summary = summaryTruncated
-        ? output.slice(0, SUMMARY_LIMIT)
-        : output;
+      const summary = summaryTruncated ? output.slice(0, SUMMARY_LIMIT) : output;
 
       try {
         this.runManager.writeOutputFile(runId, output);
@@ -188,15 +192,19 @@ export class TaskRunner {
       }
 
       await this.sessionManager.transition(runId, "completed");
+      const outputAbsPath = path.join(
+        this.runManager.getRunDir(runId),
+        "output.txt",
+      );
       await this.runManager.writeResult(runId, {
         run_id: runId,
         status: "completed",
         summary,
         summary_truncated: summaryTruncated,
-        output_path: "output.txt",
+        output_path: outputAbsPath,
         session_id: engineResponse.sessionId ?? null,
         artifacts: [],
-        duration_ms: Date.now() - startTime,
+        duration_ms: durationMs,
         token_usage: engineResponse.tokenUsage ?? null,
         files_changed: getFilesChanged(request.workspace_path),
       });

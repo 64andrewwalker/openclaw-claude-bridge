@@ -1,10 +1,10 @@
-import type { RunManager } from './run-manager.js';
-import type { Session } from '../schemas/session.js';
+import type { RunManager } from "./run-manager.js";
+import type { Session } from "../schemas/session.js";
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
-  created: ['running'],
-  running: ['completed', 'failed', 'stopping'],
-  stopping: ['completed', 'failed'],
+  created: ["running"],
+  running: ["completed", "failed", "stopping"],
+  stopping: ["completed", "failed"],
 };
 
 export class SessionManager {
@@ -16,14 +16,14 @@ export class SessionManager {
 
   async transition(
     runId: string,
-    newState: Session['state'],
-    updates?: Partial<Pick<Session, 'pid' | 'session_id'>>
+    newState: Session["state"],
+    updates?: Partial<Pick<Session, "pid" | "session_id">>,
   ): Promise<Session> {
     const current = await this.getSession(runId);
     const allowed = VALID_TRANSITIONS[current.state] ?? [];
     if (!allowed.includes(newState)) {
       throw new Error(
-        `Invalid state transition: ${current.state} \u2192 ${newState} (allowed: ${allowed.join(', ') || 'none'})`
+        `Invalid state transition: ${current.state} \u2192 ${newState} (allowed: ${allowed.join(", ") || "none"})`,
       );
     }
     await this.runManager.updateSession(runId, { state: newState, ...updates });
@@ -32,9 +32,15 @@ export class SessionManager {
 
   async resetForResume(runId: string): Promise<void> {
     const current = await this.getSession(runId);
-    if (current.state !== 'completed' && current.state !== 'failed') {
-      throw new Error(`Cannot resume from state: ${current.state} (must be completed or failed)`);
+    if (current.state !== "completed" && current.state !== "failed") {
+      throw new Error(
+        `Cannot resume from state: ${current.state} (must be completed or failed)`,
+      );
     }
-    await this.runManager.updateSession(runId, { state: 'created' });
+    await this.runManager.updateSession(runId, {
+      state: "created",
+      pid: null,
+      session_id: null,
+    });
   }
 }

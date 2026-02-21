@@ -173,13 +173,20 @@ describe("ResultSchema", () => {
     }
   });
 
-  it("accepts output_path as string", () => {
-    const input = { ...validSuccess, output_path: "output.txt" };
+  it("accepts output_path as absolute path string", () => {
+    // Bug #20 fix: output_path must be absolute or null.
+    const input = { ...validSuccess, output_path: "/runs/run-001/output.txt" };
     const result = validateResult(input);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.output_path).toBe("output.txt");
+      expect(result.data.output_path).toBe("/runs/run-001/output.txt");
     }
+  });
+
+  it("rejects output_path as relative string (bug #20 fix)", () => {
+    const input = { ...validSuccess, output_path: "output.txt" };
+    const result = validateResult(input);
+    expect(result.success).toBe(false);
   });
 
   it("accepts output_path as null", () => {
