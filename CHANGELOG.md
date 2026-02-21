@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/64andrewwalker/codebridge/compare/codebridge-v0.1.1...codebridge-v0.1.2) (2026-02-21)
+
+
+### Features
+
+* extract session ID from ~/.kimi/kimi.json for kimi-code engine ([#13](https://github.com/64andrewwalker/codebridge/issues/13)) ([2cc8243](https://github.com/64andrewwalker/codebridge/commit/2cc82437b2187478e54feb52b7f582af828ced6d))
+
 ## [0.1.1](https://github.com/64andrewwalker/codebridge/compare/codebridge-v0.1.0...codebridge-v0.1.1) (2026-02-21)
 
 
