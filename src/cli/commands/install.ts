@@ -2,12 +2,14 @@ import { Command } from 'commander';
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export function installCommand(): Command {
   return new Command('install')
     .description('Build, link globally, and generate install guide')
     .action(async () => {
-      const projectRoot = path.resolve(import.meta.dirname, '..', '..', '..');
+      const __dirname = path.dirname(fileURLToPath(import.meta.url));
+      const projectRoot = path.resolve(__dirname, '..', '..', '..');
 
       // Build and link
       try {

@@ -28,12 +28,12 @@ describe('CodexEngine', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('extracts session ID from thread.started event', async () => {
+  it('extracts thread_id from thread.started event (v0.104.0 format)', async () => {
     const scriptPath = '/tmp/cb-codex-thread.sh';
     writeFileSync(scriptPath, [
       '#!/bin/sh',
-      'echo \'{"type":"thread.started","thread":{"id":"thread-123"}}\'',
-      'echo \'{"type":"message.completed","message":{"content":[{"type":"text","text":"done"}]}}\'',
+      'echo \'{"type":"thread.started","thread_id":"thread-123"}\'',
+      'echo \'{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\'',
     ].join('\n'));
     chmodSync(scriptPath, 0o755);
     try {
@@ -46,7 +46,41 @@ describe('CodexEngine', () => {
     }
   });
 
-  it('extracts text from message.completed events', async () => {
+  it('falls back to thread.id for forward compatibility', async () => {
+    const scriptPath = '/tmp/cb-codex-thread-compat.sh';
+    writeFileSync(scriptPath, [
+      '#!/bin/sh',
+      'echo \'{"type":"thread.started","thread":{"id":"thread-456"}}\'',
+      'echo \'{"type":"item.completed","item":{"type":"agent_message","text":"compat"}}\'',
+    ].join('\n'));
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new CodexEngine({ command: scriptPath });
+      const result = await engine.start(makeRequest());
+      expect(result.sessionId).toBe('thread-456');
+      expect(result.output).toBe('compat');
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
+  it('extracts text from agent_message item (v0.104.0 format)', async () => {
+    const scriptPath = '/tmp/cb-codex-agent-msg.sh';
+    writeFileSync(scriptPath, [
+      '#!/bin/sh',
+      'echo \'{"type":"item.completed","item":{"type":"agent_message","text":"Hello from codex"}}\'',
+    ].join('\n'));
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new CodexEngine({ command: scriptPath });
+      const result = await engine.start(makeRequest());
+      expect(result.output).toBe('Hello from codex');
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
+  it('extracts text from message.completed events (fallback)', async () => {
     const scriptPath = '/tmp/cb-codex-message.sh';
     writeFileSync(scriptPath, [
       '#!/bin/sh',
@@ -62,7 +96,7 @@ describe('CodexEngine', () => {
     }
   });
 
-  it('extracts text from response.completed events', async () => {
+  it('extracts text from response.completed events (fallback)', async () => {
     const scriptPath = '/tmp/cb-codex-response.sh';
     writeFileSync(scriptPath, [
       '#!/bin/sh',
@@ -78,7 +112,7 @@ describe('CodexEngine', () => {
     }
   });
 
-  it('extracts text from output_text shorthand', async () => {
+  it('extracts text from output_text shorthand (fallback)', async () => {
     const scriptPath = '/tmp/cb-codex-output-text.sh';
     writeFileSync(scriptPath, [
       '#!/bin/sh',
@@ -94,7 +128,7 @@ describe('CodexEngine', () => {
     }
   });
 
-  it('extracts text from item.completed events', async () => {
+  it('extracts text from item.completed message type (fallback)', async () => {
     const scriptPath = '/tmp/cb-codex-item.sh';
     writeFileSync(scriptPath, [
       '#!/bin/sh',

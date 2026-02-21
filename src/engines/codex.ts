@@ -69,15 +69,43 @@ export class CodexEngine extends BaseEngine implements Engine {
       try {
         const event = JSON.parse(line) as Record<string, unknown>;
 
-        // Extract session ID from thread.started event
+        // Extract session/thread ID from thread.started event
+        // v0.104.0 uses thread_id at top level
         if (event.type === 'thread.started') {
+          if (typeof event.thread_id === 'string') {
+            sessionId = event.thread_id;
+          }
+          // Also support thread.id for forward compatibility
           const thread = event.thread as Record<string, unknown> | undefined;
-          if (thread && typeof thread.id === 'string') {
+          if (!sessionId && thread && typeof thread.id === 'string') {
             sessionId = thread.id;
           }
         }
 
-        // Extract text content from message events
+        // Extract text from item.completed events
+        // v0.104.0: item.type === 'agent_message', text in item.text
+        if (event.type === 'item.completed') {
+          const item = event.item as Record<string, unknown> | undefined;
+          if (item) {
+            // Primary: agent_message with item.text (v0.104.0 format)
+            if (item.type === 'agent_message' && typeof item.text === 'string') {
+              textParts.push(item.text);
+            }
+            // Fallback: message type with content array
+            if (item.type === 'message') {
+              const content = item.content as Array<Record<string, unknown>> | undefined;
+              if (Array.isArray(content)) {
+                for (const part of content) {
+                  if ((part.type === 'output_text' || part.type === 'text') && typeof part.text === 'string') {
+                    textParts.push(part.text);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Extract text from message/response completed events (fallback)
         if (event.type === 'message.completed' || event.type === 'response.completed') {
           const message = (event.message ?? event.response) as Record<string, unknown> | undefined;
           if (message) {
@@ -89,24 +117,8 @@ export class CodexEngine extends BaseEngine implements Engine {
                 }
               }
             }
-            // Also handle output_text shorthand
             if (typeof message.output_text === 'string') {
               textParts.push(message.output_text);
-            }
-          }
-        }
-
-        // Extract text from item-level events
-        if (event.type === 'item.completed') {
-          const item = event.item as Record<string, unknown> | undefined;
-          if (item && item.type === 'message') {
-            const content = item.content as Array<Record<string, unknown>> | undefined;
-            if (Array.isArray(content)) {
-              for (const part of content) {
-                if (part.type === 'output_text' && typeof part.text === 'string') {
-                  textParts.push(part.text);
-                }
-              }
             }
           }
         }
