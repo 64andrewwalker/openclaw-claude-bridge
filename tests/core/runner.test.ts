@@ -451,7 +451,7 @@ describe("TaskRunner", () => {
     expect(fs.readFileSync(outputPath, "utf-8")).toBe("");
   });
 
-  it("sets output_path and summary_truncated to undefined on failure", async () => {
+  it("does not include output_path or summary_truncated in failure result", async () => {
     const engine = new ClaudeCodeEngine({ command: "false" });
     const runner = new TaskRunner(runManager, sessionManager, engine);
     const runId = await runManager.createRun({
