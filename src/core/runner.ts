@@ -1,11 +1,11 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { execSync } from 'node:child_process';
-import type { RunManager } from './run-manager.js';
-import type { SessionManager } from './session-manager.js';
-import type { Engine } from './engine.js';
-import { makeError } from '../schemas/errors.js';
-import { validateRequest } from '../schemas/request.js';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { execSync } from "node:child_process";
+import type { RunManager } from "./run-manager.js";
+import type { SessionManager } from "./session-manager.js";
+import type { Engine } from "./engine.js";
+import { makeError } from "../schemas/errors.js";
+import { validateRequest } from "../schemas/request.js";
 
 export type EngineResolver = (name: string) => Engine;
 
@@ -18,9 +18,10 @@ export class TaskRunner {
     engineOrResolver: Engine | EngineResolver,
   ) {
     // Support both legacy Engine injection and new resolver function
-    this.engineResolver = typeof engineOrResolver === 'function'
-      ? engineOrResolver
-      : () => engineOrResolver;
+    this.engineResolver =
+      typeof engineOrResolver === "function"
+        ? engineOrResolver
+        : () => engineOrResolver;
   }
 
   async processRun(runId: string): Promise<void> {
@@ -28,56 +29,90 @@ export class TaskRunner {
     const request = await this.runManager.consumeRequest(runId);
 
     if (!request) {
-      await this.fail(runId, startTime, makeError('REQUEST_INVALID', 'No request.json found'));
+      await this.fail(
+        runId,
+        startTime,
+        makeError("REQUEST_INVALID", "No request.json found"),
+      );
       return;
     }
 
     // Validate request against schema
     const validation = validateRequest(request);
     if (!validation.success) {
-      await this.fail(runId, startTime, makeError('REQUEST_INVALID', validation.error.message));
+      await this.fail(
+        runId,
+        startTime,
+        makeError("REQUEST_INVALID", validation.error.message),
+      );
       return;
     }
 
     // Security: resolve workspace and check against allowed_roots
     const resolvedWorkspace = path.resolve(request.workspace_path);
     if (request.allowed_roots && request.allowed_roots.length > 0) {
-      const resolvedRoots = request.allowed_roots.map(r => path.resolve(r));
-      const hasFilesystemRoot = resolvedRoots.some(r => r === path.sep);
+      const resolvedRoots = request.allowed_roots.map((r) => path.resolve(r));
+      const hasFilesystemRoot = resolvedRoots.some((r) => r === path.sep);
       if (hasFilesystemRoot) {
-        await this.fail(runId, startTime, makeError('WORKSPACE_INVALID',
-          'Filesystem root is not permitted as an allowed_root'));
+        await this.fail(
+          runId,
+          startTime,
+          makeError(
+            "WORKSPACE_INVALID",
+            "Filesystem root is not permitted as an allowed_root",
+          ),
+        );
         return;
       }
-      const isAllowed = resolvedRoots.some(resolvedRoot =>
-        resolvedWorkspace === resolvedRoot || resolvedWorkspace.startsWith(resolvedRoot + path.sep)
+      const isAllowed = resolvedRoots.some(
+        (resolvedRoot) =>
+          resolvedWorkspace === resolvedRoot ||
+          resolvedWorkspace.startsWith(resolvedRoot + path.sep),
       );
       if (!isAllowed) {
-        await this.fail(runId, startTime, makeError('WORKSPACE_INVALID',
-          `Workspace ${resolvedWorkspace} is outside allowed roots: ${request.allowed_roots.join(', ')}`));
+        await this.fail(
+          runId,
+          startTime,
+          makeError(
+            "WORKSPACE_INVALID",
+            `Workspace ${resolvedWorkspace} is outside allowed roots: ${request.allowed_roots.join(", ")}`,
+          ),
+        );
         return;
       }
     }
 
     // Validate workspace exists and is a directory
-    if (!fs.existsSync(request.workspace_path) || !fs.statSync(request.workspace_path).isDirectory()) {
-      await this.fail(runId, startTime, makeError('WORKSPACE_NOT_FOUND', `Workspace not found: ${request.workspace_path}`));
+    if (
+      !fs.existsSync(request.workspace_path) ||
+      !fs.statSync(request.workspace_path).isDirectory()
+    ) {
+      await this.fail(
+        runId,
+        startTime,
+        makeError(
+          "WORKSPACE_NOT_FOUND",
+          `Workspace not found: ${request.workspace_path}`,
+        ),
+      );
       return;
     }
 
     // Resolve the correct engine for this request
-    const engine = this.engineResolver(request.engine ?? 'claude-code');
+    const engine = this.engineResolver(request.engine ?? "claude-code");
 
     // Execute via engine
     const engineResponse = await (async () => {
-      if (request.mode === 'resume' && request.session_id) {
-        await this.sessionManager.transition(runId, 'running', { session_id: request.session_id });
+      if (request.mode === "resume" && request.session_id) {
+        await this.sessionManager.transition(runId, "running", {
+          session_id: request.session_id,
+        });
         return engine.send(request.session_id, request.message, {
           timeoutMs: request.constraints?.timeout_ms,
           cwd: request.workspace_path,
         });
       } else {
-        await this.sessionManager.transition(runId, 'running');
+        await this.sessionManager.transition(runId, "running");
         return engine.start(request);
       }
     })();
@@ -97,12 +132,21 @@ export class TaskRunner {
       return;
     }
 
-    // Success
-    await this.sessionManager.transition(runId, 'completed');
+    // Success — write output.txt BEFORE result.json (invariant: result.json is completion signal)
+    const SUMMARY_LIMIT = 4000;
+    const output = engineResponse.output;
+    const summaryTruncated = output.length > SUMMARY_LIMIT;
+    const summary = summaryTruncated ? output.slice(0, SUMMARY_LIMIT) : output;
+
+    this.runManager.writeOutputFile(runId, output);
+
+    await this.sessionManager.transition(runId, "completed");
     await this.runManager.writeResult(runId, {
       run_id: runId,
-      status: 'completed',
-      summary: engineResponse.output.slice(0, 2000),
+      status: "completed",
+      summary,
+      summary_truncated: summaryTruncated,
+      output_path: "output.txt",
       session_id: engineResponse.sessionId ?? null,
       artifacts: [],
       duration_ms: durationMs,
@@ -115,21 +159,27 @@ export class TaskRunner {
     runId: string,
     startTime: number,
     error: { code: string; message: string; retryable: boolean },
-    engineResponse?: { output?: string; sessionId?: string | null; tokenUsage?: unknown },
+    engineResponse?: {
+      output?: string;
+      sessionId?: string | null;
+      tokenUsage?: unknown;
+    },
   ): Promise<void> {
     try {
       const session = await this.sessionManager.getSession(runId);
-      if (session.state !== 'failed' && session.state !== 'completed') {
-        if (session.state === 'created') {
-          await this.sessionManager.transition(runId, 'running');
+      if (session.state !== "failed" && session.state !== "completed") {
+        if (session.state === "created") {
+          await this.sessionManager.transition(runId, "running");
         }
-        await this.sessionManager.transition(runId, 'failed');
+        await this.sessionManager.transition(runId, "failed");
       }
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
 
     await this.runManager.writeResult(runId, {
       run_id: runId,
-      status: 'failed',
+      status: "failed",
       summary: error.message,
       session_id: engineResponse?.sessionId ?? null,
       artifacts: [],
@@ -143,10 +193,19 @@ export class TaskRunner {
 
 function getFilesChanged(cwd: string): string[] | null {
   try {
-    const modified = execSync('git diff --name-only HEAD', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-    const untracked = execSync('git ls-files --others --exclude-standard', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-    const all = [...modified.split('\n'), ...untracked.split('\n')]
-      .filter(f => f && !f.startsWith('.runs/'));
+    const modified = execSync("git diff --name-only HEAD", {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    const untracked = execSync("git ls-files --others --exclude-standard", {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    const all = [...modified.split("\n"), ...untracked.split("\n")].filter(
+      (f) => f && !f.startsWith(".runs/"),
+    );
     return [...new Set(all)];
   } catch {
     return null;
