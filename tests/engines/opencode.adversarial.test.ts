@@ -159,6 +159,34 @@ describe("OpenCodeEngine — adversarial", () => {
     }
   });
 
+  // Given a step_finish event where the tokens object has all-string values
+  // (e.g., {"input":"100","output":"50","total":"150"}),
+  // When the engine processes the event,
+  // Then tokenUsage must be null because none of the fields satisfy
+  // `typeof tokens.input === "number"` (PR #32 fix: require valid numeric field).
+  it("step_finish with tokens object that has only string values — tokenUsage is null", async () => {
+    // Before PR #32, the engine would accept ANY truthy object and produce {0,0,0}.
+    // After PR #32, at least one of input/output/total must be a real number.
+    // String values do not satisfy typeof === 'number', so tokenUsage is null.
+    const scriptPath = "/tmp/cb-adv-oc-string-tokens.sh";
+    writeFileSync(
+      scriptPath,
+      [
+        "#!/bin/sh",
+        'echo \'{"type":"step_finish","part":{"tokens":{"input":"100","output":"50","total":"150"}},"sessionID":"s1"}\'',
+      ].join("\n"),
+    );
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new OpenCodeEngine({ command: scriptPath });
+      const result = await engine.start(makeRequest());
+      // String values do not satisfy the numeric field requirement — tokenUsage must be null
+      expect(result.tokenUsage).toBeNull();
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
   it("step_finish with negative token values — tokenUsage stores negative numbers", async () => {
     // Negative tokens are nonsensical but the code doesn't validate, just passes them through.
     const scriptPath = "/tmp/cb-adv-oc-neg-tokens.sh";

@@ -117,6 +117,36 @@ describe("CodexEngine — adversarial", () => {
     }
   });
 
+  // Given a thread.started event where the top-level thread_id is absent/invalid
+  // AND the thread.id fallback field is an empty string,
+  // When the engine processes the event,
+  // Then thread.id empty string must also be rejected (PR #32 fix: `thread.id` guard).
+  it("thread.started with thread.id as empty string — rejects empty string fallback, sessionId is null", async () => {
+    // thread_id is missing (undefined), so !sessionId is true and the thread.id fallback fires.
+    // The fallback guard is: `!sessionId && thread && typeof thread.id === 'string' && thread.id`
+    // An empty string is falsy, so it must NOT be captured as the session ID.
+    const scriptPath = "/tmp/cb-adv-codex-thread-dot-id-empty.sh";
+    writeFileSync(
+      scriptPath,
+      [
+        "#!/bin/sh",
+        // thread_id absent, thread.id is empty string
+        'echo \'{"type":"thread.started","thread":{"id":""}}\'',
+        'echo \'{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\'',
+      ].join("\n"),
+    );
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new CodexEngine({ command: scriptPath });
+      const result = await engine.start(makeRequest());
+      // Empty string thread.id is falsy — rejected the same as empty thread_id
+      expect(result.sessionId).toBeNull();
+      expect(result.output).toBe("done");
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
   // -----------------------------------------------------------------------
   // JSON lines with missing or unexpected event types
   // -----------------------------------------------------------------------
