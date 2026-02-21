@@ -118,4 +118,99 @@ describe("RequestSchema", () => {
       expect(messages).toContain("Workspace path is a disallowed root path");
     }
   });
+
+  // Fix #1: whitespace-only task_id
+  it("rejects a whitespace-only task_id", () => {
+    const input = { ...validBase, task_id: "   " };
+    const result = validateRequest(input);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(
+        messages.some(
+          (m: string) =>
+            m.toLowerCase().includes("blank") ||
+            m.toLowerCase().includes("task_id"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("does not mutate (trim) task_id — preserves original value with surrounding spaces trimmed check via refine", () => {
+    // task_id with internal spaces (not just whitespace) should be accepted
+    const input = { ...validBase, task_id: "task 001" };
+    const result = validateRequest(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // refine should not transform value — original is preserved
+      expect(result.data.task_id).toBe("task 001");
+    }
+  });
+
+  // Fix #1: whitespace-only message
+  it("rejects a whitespace-only message", () => {
+    const input = { ...validBase, message: "   " };
+    const result = validateRequest(input);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(
+        messages.some(
+          (m: string) =>
+            m.toLowerCase().includes("blank") ||
+            m.toLowerCase().includes("message"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  // Fix #2: resume with null session_id
+  it("rejects mode=resume when session_id is null", () => {
+    const input = { ...validBase, mode: "resume", session_id: null };
+    const result = validateRequest(input);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(messages).toContain("resume requires session_id");
+    }
+  });
+
+  it("rejects mode=resume when session_id is omitted (defaults to null)", () => {
+    const input = { ...validBase, mode: "resume" };
+    const result = validateRequest(input);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(messages).toContain("resume requires session_id");
+    }
+  });
+
+  it("accepts mode=new with null session_id", () => {
+    const input = { ...validBase, mode: "new", session_id: null };
+    const result = validateRequest(input);
+    expect(result.success).toBe(true);
+  });
+
+  // Security: null bytes in workspace_path
+  it("rejects a workspace path containing null bytes", () => {
+    const input = { ...validBase, workspace_path: "/home/user/proj\x00ect" };
+    const result = validateRequest(input);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(messages).toContain(
+        "Workspace path must not contain null bytes",
+      );
+    }
+  });
+
+  // Security: /var/folders is a legitimate macOS user-space temp directory
+  it("accepts /var/folders as a legitimate macOS user-space temp directory", () => {
+    const input = {
+      ...validBase,
+      workspace_path: "/var/folders/abc123/myproject",
+    };
+    const result = validateRequest(input);
+    expect(result.success).toBe(true);
+  });
 });

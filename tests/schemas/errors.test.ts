@@ -56,4 +56,15 @@ describe("makeError", () => {
       expect(err.suggestion, `${code} should have suggestion`).toBeTruthy();
     }
   });
+
+  // Fix #10: makeError("") with empty string detail should fall back to default message
+  it("uses default message when empty string detail is provided", () => {
+    const err = makeError("ENGINE_TIMEOUT", "");
+    expect(err.message).toBe("Engine execution timed out");
+  });
+
+  it("uses provided detail when non-empty string detail is provided", () => {
+    const err = makeError("ENGINE_TIMEOUT", "Custom message");
+    expect(err.message).toBe("Custom message");
+  });
 });

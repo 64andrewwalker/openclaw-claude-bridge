@@ -57,7 +57,7 @@ export function makeError(code: ErrorCode, detail?: string) {
   const info = ERROR_CODES[code];
   return {
     code,
-    message: detail ?? info.message,
+    message: detail || info.message,
     retryable: info.retryable,
     suggestion: info.suggestion,
   };

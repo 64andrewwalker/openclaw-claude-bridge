@@ -17,39 +17,54 @@ const DANGEROUS_ROOTS = [
   "/var/spool",
 ];
 
-export const RequestSchema = z.object({
-  task_id: z.string().min(1),
-  intent: z.enum(["coding", "refactor", "debug", "ops"]),
-  workspace_path: z
-    .string()
-    .min(1)
-    .refine((p) => !p.includes("\x00"), {
-      message: "Workspace path must not contain null bytes",
-    })
-    .refine(
-      (p) => {
-        const resolved = path.resolve(p);
-        return !DANGEROUS_ROOTS.some(
-          (r) => resolved === r || resolved.startsWith(r + "/"),
-        );
-      },
-      { message: "Workspace path is a disallowed root path" },
-    ),
-  message: z.string().min(1),
-  engine: z
-    .enum(["claude-code", "kimi-code", "opencode", "codex"])
-    .default("claude-code"),
-  model: z.string().optional(),
-  mode: z.enum(["new", "resume"]).default("new"),
-  session_id: z.string().nullable().default(null),
-  constraints: z
-    .object({
-      timeout_ms: z.number().positive().default(1800000),
-      allow_network: z.boolean().default(true),
-    })
-    .default({ timeout_ms: 1800000, allow_network: true }),
-  allowed_roots: z.array(z.string()).optional(),
-});
+export const RequestSchema = z
+  .object({
+    task_id: z
+      .string()
+      .min(1)
+      .refine((v) => v.trim().length > 0, {
+        message: "task_id must not be blank",
+      }),
+    intent: z.enum(["coding", "refactor", "debug", "ops"]),
+    workspace_path: z
+      .string()
+      .min(1)
+      .refine((p) => !p.includes("\x00"), {
+        message: "Workspace path must not contain null bytes",
+      })
+      .refine(
+        (p) => {
+          const resolved = path.resolve(p);
+          return !DANGEROUS_ROOTS.some(
+            (r) => resolved === r || resolved.startsWith(r + "/"),
+          );
+        },
+        { message: "Workspace path is a disallowed root path" },
+      ),
+    message: z
+      .string()
+      .min(1)
+      .refine((v) => v.trim().length > 0, {
+        message: "message must not be blank",
+      }),
+    engine: z
+      .enum(["claude-code", "kimi-code", "opencode", "codex"])
+      .default("claude-code"),
+    model: z.string().optional(),
+    mode: z.enum(["new", "resume"]).default("new"),
+    session_id: z.string().nullable().default(null),
+    constraints: z
+      .object({
+        timeout_ms: z.number().positive().default(1800000),
+        allow_network: z.boolean().default(true),
+      })
+      .default({ timeout_ms: 1800000, allow_network: true }),
+    allowed_roots: z.array(z.string()).optional(),
+  })
+  .refine((d) => d.mode !== "resume" || d.session_id !== null, {
+    message: "resume requires session_id",
+    path: ["session_id"],
+  });
 
 export type TaskRequest = z.infer<typeof RequestSchema>;
 
