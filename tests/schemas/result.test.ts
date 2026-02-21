@@ -222,4 +222,102 @@ describe("ResultSchema", () => {
       expect(result.data.summary_truncated).toBe(false);
     }
   });
+
+  // Fix #3: negative token counts
+  it("rejects negative prompt_tokens", () => {
+    const input = {
+      ...validSuccess,
+      token_usage: {
+        prompt_tokens: -1,
+        completion_tokens: 800,
+        total_tokens: 799,
+      },
+    };
+    const result = validateResult(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative completion_tokens", () => {
+    const input = {
+      ...validSuccess,
+      token_usage: {
+        prompt_tokens: 100,
+        completion_tokens: -5,
+        total_tokens: 95,
+      },
+    };
+    const result = validateResult(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative total_tokens", () => {
+    const input = {
+      ...validSuccess,
+      token_usage: {
+        prompt_tokens: 100,
+        completion_tokens: 800,
+        total_tokens: -900,
+      },
+    };
+    const result = validateResult(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-integer token counts (floats)", () => {
+    const input = {
+      ...validSuccess,
+      token_usage: {
+        prompt_tokens: 1.5,
+        completion_tokens: 800,
+        total_tokens: 801.5,
+      },
+    };
+    const result = validateResult(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts zero token counts", () => {
+    const input = {
+      ...validSuccess,
+      token_usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+  });
+
+  // Fix #4: negative duration_ms
+  it("rejects negative duration_ms", () => {
+    const input = { ...validSuccess, duration_ms: -1 };
+    const result = validateResult(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts zero duration_ms", () => {
+    const input = { ...validSuccess, duration_ms: 0 };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+  });
+
+  // Fix #6: completed status with error present
+  it("rejects completed status with error field present", () => {
+    const input = {
+      ...validSuccess,
+      status: "completed" as const,
+      error: { code: "ENGINE_TIMEOUT", message: "oops", retryable: true },
+    };
+    const result = validateResult(input);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(
+        messages.some((m: string) => m.toLowerCase().includes("completed")),
+      ).toBe(true);
+    }
+  });
+
+  it("accepts empty string summary (engine produced no output)", () => {
+    const input = { ...validSuccess, summary: "" };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+  });
 });

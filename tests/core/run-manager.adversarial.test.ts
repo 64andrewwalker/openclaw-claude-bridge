@@ -96,6 +96,7 @@ describe("RunManager.listRuns – corrupt session file", () => {
   it("skips corrupt session.json entries and returns the valid ones", async () => {
     // Fix: listRuns must NOT throw when one session.json is corrupt.
     // A single corrupt entry must be skipped; the rest of the listing proceeds.
+    // Fixed in #22: corrupt entries are now skipped with a warning.
     await manager.createRun(BASE_REQUEST);
     await manager.createRun({ ...BASE_REQUEST, task_id: "task-adv-002" });
 
@@ -109,6 +110,7 @@ describe("RunManager.listRuns – corrupt session file", () => {
 
     // listRuns must resolve (not reject) and return the one valid run
     const runs = await manager.listRuns();
+    // Only the valid run is returned; the corrupt one is silently skipped.
     expect(runs).toHaveLength(1);
   });
 });

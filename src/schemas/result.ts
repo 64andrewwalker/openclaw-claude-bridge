@@ -10,9 +10,9 @@ const ErrorSchema = z.object({
 
 const TokenUsageSchema = z
   .object({
-    prompt_tokens: z.number(),
-    completion_tokens: z.number(),
-    total_tokens: z.number(),
+    prompt_tokens: z.number().int().nonnegative(),
+    completion_tokens: z.number().int().nonnegative(),
+    total_tokens: z.number().int().nonnegative(),
   })
   .nullable();
 
@@ -31,13 +31,17 @@ export const ResultSchema = z
       }),
     session_id: z.string().nullable(),
     artifacts: z.array(z.string()),
-    duration_ms: z.number(),
+    duration_ms: z.number().nonnegative(),
     token_usage: TokenUsageSchema,
     files_changed: z.array(z.string()).nullable().default(null),
     error: ErrorSchema.optional(),
   })
   .refine((data) => data.status !== "failed" || data.error !== undefined, {
     message: "error is required when status is failed",
+    path: ["error"],
+  })
+  .refine((data) => data.status !== "completed" || data.error === undefined, {
+    message: "completed result must not have an error field",
     path: ["error"],
   });
 

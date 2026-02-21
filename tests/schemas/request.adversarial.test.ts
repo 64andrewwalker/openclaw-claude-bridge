@@ -45,27 +45,28 @@ describe("RequestSchema – missing required fields", () => {
 // if the intent is to require meaningful content. This is a design gap test.
 // ---------------------------------------------------------------------------
 describe("RequestSchema – whitespace-only field values", () => {
-  it("BUG CANDIDATE: accepts task_id containing only whitespace", () => {
-    // Expectation: whitespace-only task_id is semantically empty and should fail.
-    // If this passes, it exposes a gap: min(1) does not trim/validate content.
+  it("rejects task_id containing only whitespace (fixed in #24)", () => {
+    // Schema now uses .refine(v => v.trim().length > 0) to reject whitespace-only values.
     const result = validateRequest({ ...validBase, task_id: "   " });
-    // Document the actual behavior:
-    if (result.success) {
-      // Bug: whitespace-only task_id is accepted
-      expect(result.data.task_id).toBe("   ");
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(
+        messages.some((m: string) => m.toLowerCase().includes("blank")),
+      ).toBe(true);
     }
-    // We assert the schema DOES accept it (documenting the gap, not asserting rejection)
-    // Change to toBe(false) once the schema adds .trim().min(1)
-    expect(result.success).toBe(true); // FAIL here if ever fixed
   });
 
-  it("BUG CANDIDATE: accepts message containing only whitespace", () => {
-    // Same gap as task_id above.
+  it("rejects message containing only whitespace (fixed in #24)", () => {
+    // Same fix as task_id above.
     const result = validateRequest({ ...validBase, message: "\t\n  " });
-    if (result.success) {
-      expect(result.data.message).toBe("\t\n  ");
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(
+        messages.some((m: string) => m.toLowerCase().includes("blank")),
+      ).toBe(true);
     }
-    expect(result.success).toBe(true); // FAIL here if ever fixed
   });
 });
 
@@ -333,20 +334,18 @@ describe("RequestSchema – extra field handling", () => {
 // mode + session_id semantic relationship
 // ---------------------------------------------------------------------------
 describe("RequestSchema – mode and session_id relationship", () => {
-  it("BUG CANDIDATE: allows resume mode without session_id (semantically invalid)", () => {
-    // The schema defaults session_id to null and mode defaults to 'new'.
-    // It does NOT enforce that mode='resume' requires a non-null session_id.
-    // A resume with null session_id would silently create a new session.
+  it("rejects resume mode without session_id (fixed in #24)", () => {
+    // The schema now enforces that mode='resume' requires a non-null session_id
+    // via a cross-field .refine() check.
     const result = validateRequest({
       ...validBase,
       mode: "resume",
       session_id: null,
     });
-    // Document: this currently PASSES — no cross-field validation
-    expect(result.success).toBe(true); // Change to false if cross-field check is added
-    if (result.success) {
-      expect(result.data.mode).toBe("resume");
-      expect(result.data.session_id).toBeNull();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(messages).toContain("resume requires session_id");
     }
   });
 
