@@ -33,10 +33,10 @@ codebridge submit \
 ```
 
 Engine-specific model flags:
-- `claude-code`: no model flag (uses configured model)
-- `kimi-code`: no model flag
-- `opencode`: `-m provider/model` (e.g., `pawpaw/claude-sonnet-4-5`)
-- `codex`: `-m model` (e.g., `gpt-5.3-codex`)
+- `claude-code`: `--model` (e.g., `opus`, `claude-sonnet-4-6`)
+- `kimi-code`: `-m` (e.g., `k2p5`)
+- `opencode`: `-m` (e.g., `pawpaw/claude-sonnet-4-5`)
+- `codex`: `-m` (e.g., `gpt-5.3-codex`)
 
 Always use `--wait` for tasks under 5 minutes. For longer tasks, omit `--wait` and poll with `codebridge status <run_id>`.
 
