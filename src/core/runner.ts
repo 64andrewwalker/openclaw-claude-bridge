@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { execSync } from 'node:child_process';
 import type { RunManager } from './run-manager.js';
 import type { SessionManager } from './session-manager.js';
 import type { Engine } from './engine.js';
@@ -106,6 +107,7 @@ export class TaskRunner {
       artifacts: [],
       duration_ms: durationMs,
       token_usage: engineResponse.tokenUsage ?? null,
+      files_changed: getFilesChanged(request.workspace_path),
     });
   }
 
@@ -133,7 +135,19 @@ export class TaskRunner {
       artifacts: [],
       duration_ms: Date.now() - startTime,
       token_usage: null,
+      files_changed: null,
       error,
     });
+  }
+}
+
+function getFilesChanged(cwd: string): string[] | null {
+  try {
+    const modified = execSync('git diff --name-only HEAD', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const untracked = execSync('git ls-files --others --exclude-standard', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const all = [...modified.split('\n'), ...untracked.split('\n')].filter(Boolean);
+    return [...new Set(all)];
+  } catch {
+    return null;
   }
 }

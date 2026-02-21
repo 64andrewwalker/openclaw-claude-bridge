@@ -4,6 +4,7 @@ const ErrorSchema = z.object({
   code: z.string(),
   message: z.string(),
   retryable: z.boolean(),
+  suggestion: z.string().optional(),
 });
 
 const TokenUsageSchema = z.object({
@@ -20,6 +21,7 @@ export const ResultSchema = z.object({
   artifacts: z.array(z.string()),
   duration_ms: z.number(),
   token_usage: TokenUsageSchema,
+  files_changed: z.array(z.string()).nullable().default(null),
   error: ErrorSchema.optional(),
 }).refine(
   (data) => data.status !== 'failed' || data.error !== undefined,
