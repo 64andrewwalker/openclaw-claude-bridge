@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { resolveEngine } from '../../src/engines/index';
-import { ClaudeCodeEngine } from '../../src/engines/claude-code';
-import { KimiCodeEngine } from '../../src/engines/kimi-code';
+import { resolveEngine } from '../../src/engines/index.js';
+import { ClaudeCodeEngine } from '../../src/engines/claude-code.js';
+import { KimiCodeEngine } from '../../src/engines/kimi-code.js';
 
 describe('resolveEngine', () => {
   it('returns ClaudeCodeEngine for claude-code', () => {

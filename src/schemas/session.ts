@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const SessionSchema = z.object({
   run_id: z.string(),
-  engine: z.string().default('claude-code'),
+  engine: z.enum(['claude-code', 'kimi-code']).default('claude-code'),
   session_id: z.string().nullable().default(null),
   state: z.enum(['created', 'running', 'stopping', 'completed', 'failed']),
   pid: z.number().nullable().default(null),

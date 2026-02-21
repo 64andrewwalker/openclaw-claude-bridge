@@ -74,7 +74,7 @@ On daemon startup, `Reconciler` scans runs stuck in `running` state. Probes PID 
 - **`src/core/reconciler.ts`** — Startup crash recovery
 - **`src/engines/base-engine.ts`** — Shared exec/timeout/output-cap infrastructure for all engines
 - **`src/engines/claude-code.ts`** — Spawns `claude` CLI, parses JSON output, extracts session_id and token_usage
-- **`src/engines/kimi-code.ts`** — Spawns `kimi` CLI, parses stream-json NDJSON output
+- **`src/engines/kimi-code.ts`** — Spawns `kimi` CLI, parses stream-json NDJSON output (no session resumption or token tracking)
 - **`src/engines/index.ts`** — Engine registry: `resolveEngine(name)` maps engine name to Engine instance
 - **`src/schemas/`** — Zod schemas for request, result, session, and error codes
 

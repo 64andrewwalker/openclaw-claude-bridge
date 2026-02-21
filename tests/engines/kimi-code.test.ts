@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdirSync } from 'node:fs';
-import { KimiCodeEngine } from '../../src/engines/kimi-code';
-import type { TaskRequest } from '../../src/schemas/request';
+import { KimiCodeEngine } from '../../src/engines/kimi-code.js';
+import type { TaskRequest } from '../../src/schemas/request.js';
 
 describe('KimiCodeEngine', () => {
   beforeAll(() => {
