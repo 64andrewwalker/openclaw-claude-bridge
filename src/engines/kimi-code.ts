@@ -38,12 +38,11 @@ export class KimiCodeEngine extends BaseEngine implements Engine {
 
   private buildStartArgs(task: TaskRequest): string[] {
     if (this.defaultArgs.length > 0) return [...this.defaultArgs];
-    const args = ['--print', '--output-format', 'stream-json', '-w', task.workspace_path];
-    if (task.model) {
-      args.push('-m', task.model);
-    }
-    args.push('-p', task.message);
-    return args;
+    return [
+      '--print', '--output-format', 'stream-json',
+      '-w', task.workspace_path,
+      '-p', task.message,
+    ];
   }
 
   protected parseOutput(stdout: string, _stderr: string, pid: number): EngineResponse {

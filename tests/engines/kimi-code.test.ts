@@ -95,35 +95,6 @@ describe('KimiCodeEngine', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('includes -m flag when model is specified', async () => {
-    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
-    const scriptPath = '/tmp/cb-kimi-model.sh';
-    writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
-    chmodSync(scriptPath, 0o755);
-    try {
-      const engine = new KimiCodeEngine({ command: scriptPath });
-      const result = await engine.start(makeRequest({ model: 'k2p5' }));
-      expect(result.output).toContain('-m');
-      expect(result.output).toContain('k2p5');
-    } finally {
-      unlinkSync(scriptPath);
-    }
-  });
-
-  it('does not include -m flag when model is not specified', async () => {
-    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
-    const scriptPath = '/tmp/cb-kimi-no-model.sh';
-    writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
-    chmodSync(scriptPath, 0o755);
-    try {
-      const engine = new KimiCodeEngine({ command: scriptPath });
-      const result = await engine.start(makeRequest());
-      expect(result.output).not.toContain('-m');
-    } finally {
-      unlinkSync(scriptPath);
-    }
-  });
-
   // --- Variant / Edge Case Tests ---
 
   it('handles empty content array gracefully', async () => {

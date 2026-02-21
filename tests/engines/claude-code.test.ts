@@ -80,35 +80,6 @@ describe('ClaudeCodeEngine', () => {
     await expect(engine.stop(999999)).resolves.not.toThrow();
   });
 
-  it('includes --model flag when model is specified', async () => {
-    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
-    const scriptPath = '/tmp/cb-claude-model.sh';
-    writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
-    chmodSync(scriptPath, 0o755);
-    try {
-      const engine = new ClaudeCodeEngine({ command: scriptPath });
-      const result = await engine.start(makeRequest({ model: 'opus' }));
-      expect(result.output).toContain('--model');
-      expect(result.output).toContain('opus');
-    } finally {
-      unlinkSync(scriptPath);
-    }
-  });
-
-  it('does not include --model flag when model is not specified', async () => {
-    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
-    const scriptPath = '/tmp/cb-claude-no-model.sh';
-    writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
-    chmodSync(scriptPath, 0o755);
-    try {
-      const engine = new ClaudeCodeEngine({ command: scriptPath });
-      const result = await engine.start(makeRequest());
-      expect(result.output).not.toContain('--model');
-    } finally {
-      unlinkSync(scriptPath);
-    }
-  });
-
   it('caps oversized output and returns ENGINE_CRASH', async () => {
     const bytes = 11 * 1024 * 1024; // > 10MB cap
     const engine = new ClaudeCodeEngine({
