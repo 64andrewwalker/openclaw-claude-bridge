@@ -27,11 +27,18 @@ export abstract class BaseEngine {
       let timedOut = false;
       let outputOverflow = false;
       let totalBytes = 0;
+      let killScheduled = false;
+
+      const escalateKill = () => {
+        if (killScheduled) return;
+        killScheduled = true;
+        child.kill('SIGTERM');
+        setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* already dead */ } }, 3000);
+      };
 
       const captureChunk = (chunk: Buffer, target: 'stdout' | 'stderr') => {
         if (outputOverflow) return;
-        const incoming = chunk.toString();
-        const incomingBytes = Buffer.byteLength(incoming);
+        const incomingBytes = chunk.byteLength;
         const remaining = BaseEngine.MAX_OUTPUT_BYTES - totalBytes;
 
         if (incomingBytes > remaining) {
@@ -42,11 +49,11 @@ export abstract class BaseEngine {
             totalBytes += remaining;
           }
           outputOverflow = true;
-          child.kill('SIGTERM');
-          setTimeout(() => child.kill('SIGKILL'), 3000);
+          escalateKill();
           return;
         }
 
+        const incoming = chunk.toString();
         if (target === 'stdout') stdout += incoming;
         else stderr += incoming;
         totalBytes += incomingBytes;
@@ -54,8 +61,7 @@ export abstract class BaseEngine {
 
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill('SIGTERM');
-        setTimeout(() => child.kill('SIGKILL'), 3000);
+        escalateKill();
       }, timeoutMs);
 
       child.stdout?.on('data', (chunk: Buffer) => captureChunk(chunk, 'stdout'));
