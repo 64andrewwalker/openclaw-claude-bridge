@@ -28,6 +28,7 @@ No linter is configured. TypeScript `strict: true` is the only static analysis.
 ### File-Driven Task Protocol
 
 Every task is a run directory under `.runs/<run_id>/`:
+
 - `request.json` — written by CLI, consumed atomically by runner (renamed to `request.processing.json`)
 - `session.json` — mutable state machine: `created → running → completed|failed`
 - `result.json` — written by runner on completion or failure
@@ -52,6 +53,7 @@ Engine (resolved by registry) → spawns CLI with appropriate flags
 ### Session State Machine
 
 Transitions enforced by `SessionManager` with explicit allowlist:
+
 - `created → running`
 - `running → completed | failed | stopping`
 - `stopping → completed | failed`
@@ -93,20 +95,41 @@ On daemon startup, `Reconciler` scans runs stuck in `running` state. Probes PID 
 
 ## Environment Variables
 
-| Variable | Purpose |
-|---|---|
+| Variable                            | Purpose                                                               |
+| ----------------------------------- | --------------------------------------------------------------------- |
 | `CODEBRIDGE_CLAUDE_PERMISSION_MODE` | Claude CLI permission mode (`bypassPermissions`, `acceptEdits`, etc.) |
-| `CODEBRIDGE_POLL_INTERVAL_MS` | E2E script poll interval |
-| `CODEBRIDGE_POLL_MAX` | E2E script max poll iterations |
-| `CODEBRIDGE_REMOTE_DIR` | E2E script remote directory |
+| `CODEBRIDGE_POLL_INTERVAL_MS`       | E2E script poll interval                                              |
+| `CODEBRIDGE_POLL_MAX`               | E2E script max poll iterations                                        |
+| `CODEBRIDGE_REMOTE_DIR`             | E2E script remote directory                                           |
 
 ## PR 审查默认流程
 
 - 当用户发来 PR 链接/列表要求 review 时，默认直接执行端到端审查，不只停留在建议。
 - 必查三点：
-  1) 是否真正解决问题。
-  2) 更改是否合理（含回归风险、可维护性、测试覆盖）。
-  3) 是否可直接合并，或必须修改后再合并。
+  1. 是否真正解决问题。
+  2. 更改是否合理（含回归风险、可维护性、测试覆盖）。
+  3. 是否可直接合并，或必须修改后再合并。
 - 有较大问题：在 PR 下给出阻塞评论（明确文件/风险/结论），不合并。
 - 只有小问题：直接在对应 PR 分支修复、补测试并验证，通过后再合并。
 - 审查结论要包含：每个 PR 的处理决定（merge / changes requested）和关键依据。
+
+## Session Discipline
+
+### One deliverable per session
+
+Do not pack "implement + review + fix + merge + test" into one session.
+If a task involves >3 files or >2 independent steps, enter plan mode and get confirmation before executing.
+
+### Local validation before push
+
+After modifying code, run the appropriate checks before any `git push`:
+
+- TypeScript: `npx tsc --noEmit`
+
+The pre-push hook will block pushes that fail validation, but proactively validate anyway.
+
+### Observer Agent Rules
+
+- Only launch for complex sessions (>30 minutes estimated)
+- Must have a concrete extraction goal — no open-ended "observe and record"
+- No empty "no new activity" updates
