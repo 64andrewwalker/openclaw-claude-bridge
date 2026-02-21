@@ -1,87 +1,113 @@
 ---
 name: codebridge
-description: Delegate complex coding, refactoring, debugging, and ops tasks to a powerful coding engine via CLI.
+description: Delegate complex coding tasks to another AI coding engine (Claude Code or Kimi Code) via CLI, with structured results.
 ---
 
-# CodeBridge Skill
+# CodeBridge — Task Delegation Skill
 
-You have access to the `codebridge` CLI tool which delegates complex coding tasks to a powerful AI coding engine (Claude Code).
+You can delegate complex, multi-file coding tasks to a separate AI coding engine instance via the `codebridge` CLI. The engine runs in its own process with its own context, executes the task, and returns structured results.
 
 ## When to Use
 
-Use codebridge when the user's request involves:
-- Complex code generation or refactoring across multiple files
-- Debugging tasks requiring deep codebase analysis
-- Operations tasks (deployment scripts, infrastructure changes)
-- Any coding task that would benefit from a dedicated coding agent
+- The task requires working in a **different workspace** (another repo, another directory)
+- The task is **complex enough** to benefit from a dedicated coding agent (multi-file refactor, feature implementation, debugging)
+- You want **execution isolation** — the engine runs independently with its own context window
 
-## Commands
+## When NOT to Use
 
-### Submit a new task
+- Simple single-file edits you can do directly
+- Tasks in your current workspace that don't need isolation
+- Read-only exploration (use your own tools instead)
+
+## Submitting a Task
 
 ```bash
-codebridge submit --intent <coding|refactor|debug|ops> --workspace <path> --message "<task description>"
+codebridge submit \
+  --intent <coding|refactor|debug|ops> \
+  --workspace <absolute-path> \
+  --message "<clear task description>" \
+  --engine <claude-code|kimi-code> \
+  --wait \
+  --timeout 120000
 ```
 
-Returns JSON: `{ "run_id": "...", "status": "created" }`
+Always use `--wait` for tasks under 5 minutes. For longer tasks, omit `--wait` and poll with `codebridge status <run_id>`.
 
-Add `--wait` to block until the task completes and get the full result.
+## Reading the Result
 
-### Check task status
+The result is JSON:
+
+```json
+{
+  "run_id": "run-xyz",
+  "status": "completed",
+  "summary": "Implemented auth middleware...",
+  "session_id": "session-abc",
+  "files_changed": ["src/auth.ts", "src/middleware.ts"],
+  "duration_ms": 15234,
+  "token_usage": { "prompt_tokens": 1234, "completion_tokens": 567, "total_tokens": 1801 },
+  "error": null
+}
+```
+
+Key fields:
+- **status**: `completed` or `failed`
+- **summary**: What the engine did (first 2000 chars of output)
+- **files_changed**: List of modified/created files in the workspace (null if not a git repo)
+- **error.suggestion**: What to do if it failed (human-readable guidance)
+- **error.retryable**: Whether automatic retry makes sense
+- **session_id**: For sending follow-up messages via `resume`
+
+## Reporting Results to the User
+
+**Success:** Report the summary and list files_changed. Example:
+> Task completed in 15s. Modified files: src/auth.ts, src/middleware.ts, tests/auth.test.ts
+
+**Failed + retryable:** Retry once automatically. If it fails again, report error.suggestion to the user.
+
+**Failed + not retryable:** Report error.suggestion directly. Do not retry.
+
+## Resuming a Session
+
+To send a follow-up to an existing task:
 
 ```bash
+codebridge resume <run_id> --message "<follow-up instruction>" --wait
+```
+
+Only works if the previous run has a `session_id`. Check with `codebridge status <run_id>` first.
+
+## Polling (for long tasks)
+
+```bash
+# Submit without --wait
+codebridge submit --intent coding --workspace /path --message "..." --engine claude-code
+
+# Poll every 5 seconds
 codebridge status <run_id>
+# Look for state: "completed" or "failed"
+
+# When done, read the result
+# result.json is at .runs/<run_id>/result.json
 ```
 
-### Send follow-up to existing session
+## Error Reference
+
+| Code | Retryable | What to Do |
+|------|-----------|------------|
+| ENGINE_TIMEOUT | yes | Increase --timeout or simplify the task |
+| ENGINE_CRASH | yes | Retry the task |
+| ENGINE_AUTH | no | Check engine credentials |
+| WORKSPACE_NOT_FOUND | no | Verify workspace path exists |
+| WORKSPACE_INVALID | no | Use a permitted directory |
+| REQUEST_INVALID | no | Fix intent/engine/workspace fields |
+| RUNNER_CRASH_RECOVERY | yes | Retry the task |
+| TASK_STOPPED | no | Task was manually stopped |
+
+## Other Commands
 
 ```bash
-codebridge resume <run_id> --message "<follow-up>"
+codebridge stop <run_id>       # Force-stop a running task
+codebridge logs <run_id>       # View task logs
+codebridge doctor              # Check environment (engines, paths)
 ```
-
-Use resume when:
-- The user provides additional context for the same task
-- The user wants to refine or iterate on the previous result
-- The task needs continuation (e.g., "now add tests for that")
-
-Use a new submit when:
-- The user starts a completely different task
-- The previous task is completed and unrelated follow-up begins
-
-### Stop a running task
-
-```bash
-codebridge stop <run_id>
-```
-
-### View logs
-
-```bash
-codebridge logs <run_id>
-```
-
-### Diagnose environment
-
-```bash
-codebridge doctor
-```
-
-## Response Handling
-
-Parse the JSON output and present to the user:
-- **Success**: Show the summary. Mention artifacts if any were produced.
-- **Failed + retryable**: Inform the user and offer to retry.
-- **Failed + not retryable**: Explain the error and suggest corrective action.
-
-## Error Codes
-
-| Code | Meaning | Action |
-|------|---------|--------|
-| ENGINE_TIMEOUT | Task took too long | Suggest simplifying the task or increasing timeout |
-| ENGINE_CRASH | Engine process crashed | Retry automatically if retryable=true |
-| ENGINE_AUTH | Auth failure | Ask user to check credentials |
-| WORKSPACE_NOT_FOUND | Bad path | Ask user to verify workspace path |
-| WORKSPACE_INVALID | Dangerous path | Reject and explain why |
-| NETWORK_ERROR | Network issue | Retry after checking connectivity |
-| REQUEST_INVALID | Bad request format | Fix request parameters |
-| RUNNER_CRASH_RECOVERY | Orphaned task | Offer to retry the task |

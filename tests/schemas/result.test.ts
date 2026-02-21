@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { validateResult } from '../../src/schemas/result';
-import { makeError } from '../../src/schemas/errors';
+import { validateResult } from '../../src/schemas/result.js';
+import { makeError } from '../../src/schemas/errors.js';
 
 describe('ResultSchema', () => {
   const validSuccess = {
@@ -113,6 +113,50 @@ describe('ResultSchema', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.error).toBeUndefined();
+    }
+  });
+
+  it('accepts files_changed as string array', () => {
+    const input = { ...validSuccess, files_changed: ['src/auth.ts', 'tests/auth.test.ts'] };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.files_changed).toEqual(['src/auth.ts', 'tests/auth.test.ts']);
+    }
+  });
+
+  it('accepts files_changed as null', () => {
+    const input = { ...validSuccess, files_changed: null };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.files_changed).toBeNull();
+    }
+  });
+
+  it('defaults files_changed to null when omitted', () => {
+    const result = validateResult(validSuccess);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.files_changed).toBeNull();
+    }
+  });
+
+  it('accepts error with suggestion field', () => {
+    const input = {
+      ...validSuccess,
+      status: 'failed',
+      error: {
+        code: 'ENGINE_TIMEOUT',
+        message: 'Timed out',
+        retryable: true,
+        suggestion: 'Increase timeout',
+      },
+    };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.error!.suggestion).toBe('Increase timeout');
     }
   });
 });

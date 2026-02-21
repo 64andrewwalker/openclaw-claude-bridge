@@ -3,6 +3,7 @@ import { TaskRunner } from '../../src/core/runner.js';
 import { RunManager } from '../../src/core/run-manager.js';
 import { SessionManager } from '../../src/core/session-manager.js';
 import { ClaudeCodeEngine } from '../../src/engines/claude-code.js';
+import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -171,5 +172,62 @@ describe('TaskRunner', () => {
     const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
     expect(result.error.code).toBe('WORKSPACE_NOT_FOUND');
     expect(result.error.retryable).toBe(false);
+  });
+
+  it('includes files_changed in result for git workspace', async () => {
+    // Set up a git repo as workspace
+    execSync('git init && git config user.email "test@test.com" && git config user.name "Test"', { cwd: workspaceDir });
+    fs.writeFileSync(path.join(workspaceDir, 'existing.txt'), 'original');
+    execSync('git add . && git commit -m "init"', { cwd: workspaceDir });
+
+    // Engine script that modifies a file and creates a new one
+    const script = `bash -c 'echo modified > ${workspaceDir}/existing.txt && echo new > ${workspaceDir}/added.txt'`;
+    const engine = new ClaudeCodeEngine({ command: 'bash', defaultArgs: ['-c', `echo modified > ${workspaceDir}/existing.txt && echo new > ${workspaceDir}/added.txt && echo done`] });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const runId = await runManager.createRun({
+      task_id: 'task-fc', intent: 'coding', workspace_path: workspaceDir,
+      message: 'Modify files', engine: 'claude-code', mode: 'new',
+    });
+
+    await runner.processRun(runId);
+
+    const resultPath = path.join(runsDir, runId, 'result.json');
+    const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+    expect(result.status).toBe('completed');
+    expect(result.files_changed).toBeInstanceOf(Array);
+    expect(result.files_changed).toContain('existing.txt');
+    expect(result.files_changed).toContain('added.txt');
+  });
+
+  it('sets files_changed to null for non-git workspace', async () => {
+    const engine = new ClaudeCodeEngine({ command: 'echo', defaultArgs: ['done'] });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const runId = await runManager.createRun({
+      task_id: 'task-nongit', intent: 'coding', workspace_path: workspaceDir,
+      message: 'No git', engine: 'claude-code', mode: 'new',
+    });
+
+    await runner.processRun(runId);
+
+    const resultPath = path.join(runsDir, runId, 'result.json');
+    const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+    expect(result.status).toBe('completed');
+    expect(result.files_changed).toBeNull();
+  });
+
+  it('includes suggestion in error results', async () => {
+    const engine = new ClaudeCodeEngine({ command: 'false' });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const runId = await runManager.createRun({
+      task_id: 'task-sug', intent: 'coding', workspace_path: workspaceDir,
+      message: 'Will fail', engine: 'claude-code', mode: 'new',
+    });
+
+    await runner.processRun(runId);
+
+    const resultPath = path.join(runsDir, runId, 'result.json');
+    const result = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+    expect(result.status).toBe('failed');
+    expect(result.error.suggestion).toBeTruthy();
   });
 });
