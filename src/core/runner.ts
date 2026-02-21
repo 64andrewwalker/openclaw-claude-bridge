@@ -48,10 +48,35 @@ export class TaskRunner {
       return;
     }
 
-    // Security: resolve workspace and check against allowed_roots
-    const resolvedWorkspace = path.resolve(request.workspace_path);
+    // Security: resolve workspace via realpathSync (follows symlinks) before
+    // checking against allowed_roots.  Fall back to a WORKSPACE_NOT_FOUND
+    // failure for paths that don't exist yet (realpathSync requires existence).
+    let resolvedWorkspace: string;
+    try {
+      resolvedWorkspace = fs.realpathSync(request.workspace_path);
+    } catch {
+      await this.fail(
+        runId,
+        startTime,
+        makeError(
+          "WORKSPACE_NOT_FOUND",
+          `Workspace not found: ${request.workspace_path}`,
+        ),
+      );
+      return;
+    }
+
     if (request.allowed_roots && request.allowed_roots.length > 0) {
-      const resolvedRoots = request.allowed_roots.map((r) => path.resolve(r));
+      // Use realpathSync for roots too so symlinks in allowed_roots are resolved
+      // consistently with the workspace resolution above. Fall back to
+      // path.resolve for any root that does not exist on disk yet.
+      const resolvedRoots = request.allowed_roots.map((r) => {
+        try {
+          return fs.realpathSync(r);
+        } catch {
+          return path.resolve(r);
+        }
+      });
       const hasFilesystemRoot = resolvedRoots.some((r) => r === path.sep);
       if (hasFilesystemRoot) {
         await this.fail(
@@ -82,17 +107,14 @@ export class TaskRunner {
       }
     }
 
-    // Validate workspace exists and is a directory
-    if (
-      !fs.existsSync(request.workspace_path) ||
-      !fs.statSync(request.workspace_path).isDirectory()
-    ) {
+    // Validate workspace is a directory (realpathSync already verified existence above)
+    if (!fs.statSync(resolvedWorkspace).isDirectory()) {
       await this.fail(
         runId,
         startTime,
         makeError(
           "WORKSPACE_NOT_FOUND",
-          `Workspace not found: ${request.workspace_path}`,
+          `Workspace is not a directory: ${request.workspace_path}`,
         ),
       );
       return;
@@ -154,12 +176,16 @@ export class TaskRunner {
     }
 
     await this.sessionManager.transition(runId, "completed");
+    const outputAbsPath = path.join(
+      this.runManager.getRunDir(runId),
+      "output.txt",
+    );
     await this.runManager.writeResult(runId, {
       run_id: runId,
       status: "completed",
       summary,
       summary_truncated: summaryTruncated,
-      output_path: "output.txt",
+      output_path: outputAbsPath,
       session_id: engineResponse.sessionId ?? null,
       artifacts: [],
       duration_ms: durationMs,
