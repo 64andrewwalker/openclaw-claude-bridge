@@ -7,6 +7,11 @@ import * as os from 'node:os';
 const CLI = 'npx tsx src/cli/index.ts';
 const CWD = process.cwd();
 
+function hasKimiBinary(): boolean {
+  try { execSync('which kimi', { stdio: 'ignore' }); return true; } catch { return false; }
+}
+const KIMI_AVAILABLE = hasKimiBinary();
+
 describe('E2E: codebridge CLI', () => {
   let workspaceDir: string;
   let runsDir: string;
@@ -114,7 +119,7 @@ describe('E2E: codebridge CLI', () => {
     expect(session.state).toBe('created');
   });
 
-  it('submit --wait with kimi-code engine completes end-to-end', () => {
+  it.skipIf(!KIMI_AVAILABLE)('submit --wait with kimi-code engine completes end-to-end', () => {
     const stdout = execSync(
       `${CLI} submit --intent coding --workspace "${workspaceDir}" --message "Reply with exactly: hello from kimi" --runs-dir "${runsDir}" --engine kimi-code --wait --timeout 60000`,
       { encoding: 'utf-8', cwd: CWD, timeout: 90000 }
