@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.4](https://github.com/64andrewwalker/codebridge/compare/codebridge-v0.1.3...codebridge-v0.1.4) (2026-02-21)
+
+
+### Bug Fixes
+
+* clear stale pid and session_id on resetForResume ([#23](https://github.com/64andrewwalker/codebridge/issues/23)) ([#28](https://github.com/64andrewwalker/codebridge/issues/28)) ([aadb172](https://github.com/64andrewwalker/codebridge/commit/aadb1723bf4f47c69a02f15c48104c47973fd8b4))
+* engine parser edge cases for tokens and sessionId ([#26](https://github.com/64andrewwalker/codebridge/issues/26)) ([#32](https://github.com/64andrewwalker/codebridge/issues/32)) ([a67751e](https://github.com/64andrewwalker/codebridge/commit/a67751e47fc0bb45ef647bc6b99b2cc36d5622f3))
+* filter KimiCode output to assistant role only ([#21](https://github.com/64andrewwalker/codebridge/issues/21)) ([#31](https://github.com/64andrewwalker/codebridge/issues/31)) ([a31fbd4](https://github.com/64andrewwalker/codebridge/commit/a31fbd44a6e63c1ad6faf9a21031059ef3e6dc56))
+* reconciler handles stopping state and corrupt session.json ([#22](https://github.com/64andrewwalker/codebridge/issues/22)) ([#29](https://github.com/64andrewwalker/codebridge/issues/29)) ([4484cbc](https://github.com/64andrewwalker/codebridge/commit/4484cbcafe305a7b9b47e64fc880b70dbad757b8))
+* security — path traversal and workspace validation ([#20](https://github.com/64andrewwalker/codebridge/issues/20)) ([#34](https://github.com/64andrewwalker/codebridge/issues/34)) ([81a6f30](https://github.com/64andrewwalker/codebridge/commit/81a6f30c67c7b2a0050c66f119d6b4d3631b0435))
+* tighten Zod schema validation constraints ([#24](https://github.com/64andrewwalker/codebridge/issues/24)) ([#30](https://github.com/64andrewwalker/codebridge/issues/30)) ([d9772b4](https://github.com/64andrewwalker/codebridge/commit/d9772b414df80d845e7716d3b2ce341cc6dea07f))
+* validate CLI inputs before writing to disk ([#25](https://github.com/64andrewwalker/codebridge/issues/25)) ([#33](https://github.com/64andrewwalker/codebridge/issues/33)) ([32a7227](https://github.com/64andrewwalker/codebridge/commit/32a7227fcaecb19533805579f2838c2b6fb326c1))
+* wrap processRun in top-level try/catch to guarantee result.json ([#27](https://github.com/64andrewwalker/codebridge/issues/27)) ([6cef36c](https://github.com/64andrewwalker/codebridge/commit/6cef36c20ad65328143dd6e40f042680c998ba65))
+
 ## [0.1.3](https://github.com/64andrewwalker/codebridge/compare/codebridge-v0.1.2...codebridge-v0.1.3) (2026-02-21)
 
 
