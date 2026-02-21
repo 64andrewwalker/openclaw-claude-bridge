@@ -79,8 +79,9 @@ describe("ResultSchema – token_usage numeric edge cases", () => {
     expect(result.success).toBe(false);
   });
 
-  it("BUG CANDIDATE: accepts negative token counts", () => {
+  it("rejects negative token counts (fixed in #24)", () => {
     // Token counts cannot logically be negative.
+    // Fixed: schema now uses .int().nonnegative() for token counts.
     const result = validateResult({
       ...validSuccess,
       token_usage: {
@@ -89,10 +90,7 @@ describe("ResultSchema – token_usage numeric edge cases", () => {
         total_tokens: -2,
       },
     });
-    if (result.success) {
-      expect(result.data.token_usage!.prompt_tokens).toBe(-1);
-    }
-    expect(result.success).toBe(true); // BUG: should be false — enable once .nonnegative() is added
+    expect(result.success).toBe(false);
   });
 
   it("rejects token_usage with string values", () => {
@@ -120,11 +118,11 @@ describe("ResultSchema – token_usage numeric edge cases", () => {
 // duration_ms edge cases
 // ---------------------------------------------------------------------------
 describe("ResultSchema – duration_ms edge cases", () => {
-  it("BUG CANDIDATE: accepts negative duration_ms", () => {
+  it("rejects negative duration_ms (fixed in #24)", () => {
     // duration_ms should not be negative — it is a duration.
+    // Fixed: schema now uses .nonnegative() for duration_ms.
     const result = validateResult({ ...validSuccess, duration_ms: -1 });
-    if (result.success) expect(result.data.duration_ms).toBe(-1);
-    expect(result.success).toBe(true); // BUG: should be false — enable once .nonnegative() is added
+    expect(result.success).toBe(false);
   });
 
   it("rejects NaN for duration_ms (Zod v3+ z.number() rejects NaN)", () => {
@@ -243,16 +241,20 @@ describe("ResultSchema – summary_truncated type enforcement", () => {
 // error field on completed result
 // ---------------------------------------------------------------------------
 describe("ResultSchema – error field cross-validation", () => {
-  it("BUG CANDIDATE: accepts completed status WITH error field present", () => {
-    // The refine only checks that failed status requires error.
-    // But completed + error is semantically contradictory — no guard against it.
+  it("rejects completed status WITH error field present (fixed in #24)", () => {
+    // Fixed: schema now adds a second .refine() that rejects completed + error.
     const result = validateResult({
       ...validSuccess,
       status: "completed",
       error: { code: "ENGINE_CRASH", message: "Oops", retryable: true },
     });
-    if (result.success) expect(result.data.error).toBeDefined();
-    expect(result.success).toBe(true); // BUG: completed with error should probably be rejected
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i: any) => i.message);
+      expect(
+        messages.some((m: string) => m.toLowerCase().includes("completed")),
+      ).toBe(true);
+    }
   });
 
   it("rejects error.retryable as string", () => {
