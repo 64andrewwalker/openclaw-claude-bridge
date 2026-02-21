@@ -12,7 +12,7 @@ You can delegate complex, multi-file coding tasks to a separate AI coding engine
 | Engine | Session Resume | Token Tracking | Model Selection |
 |--------|---------------|----------------|-----------------|
 | `claude-code` | yes | yes | `--model opus`, `--model claude-sonnet-4-6` |
-| `kimi-code` | no | no | `--model k2p5` |
+| `kimi-code` | yes | no | `--model k2p5` |
 | `opencode` | yes | yes | `--model pawpaw/claude-sonnet-4-5` |
 | `codex` | yes | no | `--model gpt-5.3-codex` |
 
