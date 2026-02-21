@@ -132,7 +132,8 @@ export class KimiCodeEngine extends BaseEngine implements Engine {
       .map((l) => l.trim())
       .filter(Boolean);
     const parts: string[] = [];
-    let foundContentArray = false;
+    let foundAssistantContent = false;
+    let foundNonAssistantRoleWithContent = false;
     for (const line of lines) {
       if (!line.startsWith("{") && !line.startsWith("[")) continue;
       try {
@@ -145,20 +146,31 @@ export class KimiCodeEngine extends BaseEngine implements Engine {
           parsed.content &&
           Array.isArray(parsed.content)
         ) {
-          foundContentArray = true;
+          foundAssistantContent = true;
           for (const c of parsed.content) {
             if (c.type === "text" && typeof c.text === "string")
               parts.push(c.text);
           }
+        } else if (
+          parsed.role !== "assistant" &&
+          parsed.role !== undefined &&
+          parsed.content &&
+          Array.isArray(parsed.content)
+        ) {
+          foundNonAssistantRoleWithContent = true;
         }
       } catch {
         /* skip unparseable lines */
       }
     }
 
-    // If we found content arrays, return collected text (may be empty if only think/tool parts).
-    // Only fall back to raw output when no Kimi JSON structure was found at all.
-    if (foundContentArray) return { text: parts.join("") };
+    // If we found assistant content arrays, return collected text (may be empty if only think/tool parts).
+    if (foundAssistantContent) return { text: parts.join("") };
+    // If we found Kimi JSON with non-assistant roles (user/system echoed back), return empty string
+    // rather than leaking raw JSON into the output.
+    if (foundNonAssistantRoleWithContent) return { text: "" };
+    // Only fall back to raw output when no Kimi role-structured JSON was found at all
+    // (e.g. plain text, assistant message with no content field, or non-role JSON).
     return { text: trimmed };
   }
 }
