@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { mkdirSync } from 'node:fs';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import path from 'node:path';
 import { KimiCodeEngine } from '../../src/engines/kimi-code.js';
 import type { TaskRequest } from '../../src/schemas/request.js';
 
@@ -193,13 +194,6 @@ describe('KimiCodeEngine', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('always returns null sessionId', async () => {
-    const payload = '{"role":"assistant","content":[{"type":"text","text":"test"}],"session_id":"should-be-ignored"}';
-    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
-    const result = await engine.start(makeRequest());
-    expect(result.sessionId).toBeNull();
-  });
-
   // --- send() method parsing tests ---
   // Note: send() builds its own args (ignoring defaultArgs), so we use script wrappers.
 
@@ -214,7 +208,6 @@ describe('KimiCodeEngine', () => {
       const result = await engine.send('sess-123', 'follow up', { cwd: '/tmp/cb-test-project' });
       expect(result.output).toBe('resumed response');
       expect(result.error).toBeUndefined();
-      expect(result.sessionId).toBeNull();
       expect(result.tokenUsage).toBeNull();
     } finally {
       unlinkSync(scriptPath);
@@ -275,21 +268,9 @@ describe('KimiCodeEngine', () => {
   });
 
   it('builds resume args with --session flag', async () => {
-    // Use node -e to echo all args as JSON. send() passes args directly to spawn.
-    const engine = new KimiCodeEngine({
-      command: 'node',
-    });
-    // Override: node -e script echoes argv. But send() builds its own args...
-    // The trick: use env var to pass a script, or use a shell wrapper.
-    // Simplest: sh -c 'printf "%s\n" "$@"' _ will print each arg on a line.
-    const echoEngine = new KimiCodeEngine({ command: 'sh' });
-    // send() will call: sh --print --output-format stream-json --session sess-abc -w /tmp/cb-test-project -p 'follow up'
-    // sh interprets --print as an error. Instead, we need /usr/bin/env printf or similar.
-    // Best: use a wrapper that ignores flags and prints all args.
-    // Actually the simplest way: write a tiny temp script.
-    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
+    const { writeFileSync: wfs, unlinkSync, chmodSync } = await import('node:fs');
     const scriptPath = '/tmp/cb-echo-args.sh';
-    writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
+    wfs(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
     chmodSync(scriptPath, 0o755);
     try {
       const testEngine = new KimiCodeEngine({ command: scriptPath });
@@ -302,5 +283,121 @@ describe('KimiCodeEngine', () => {
     } finally {
       unlinkSync(scriptPath);
     }
+  });
+
+  // --- Session ID extraction from ~/.kimi/kimi.json ---
+
+  describe('session ID extraction', () => {
+    const fakeHome = '/tmp/cb-kimi-home-test';
+    let originalHome: string | undefined;
+
+    beforeAll(() => {
+      mkdirSync(path.join(fakeHome, '.kimi'), { recursive: true });
+    });
+
+    beforeEach(() => {
+      originalHome = process.env.HOME;
+      process.env.HOME = fakeHome;
+    });
+
+    afterEach(() => {
+      process.env.HOME = originalHome;
+      try { rmSync(path.join(fakeHome, '.kimi', 'kimi.json')); } catch { /* ok */ }
+    });
+
+    const writeKimiJson = (workDirs: Array<{ path: string; last_session_id?: string }>) => {
+      writeFileSync(
+        path.join(fakeHome, '.kimi', 'kimi.json'),
+        JSON.stringify({ work_dirs: workDirs }),
+      );
+    };
+
+    it('returns null when kimi.json does not exist', async () => {
+      const payload = '{"role":"assistant","content":[{"type":"text","text":"test"}]}';
+      const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+      const result = await engine.start(makeRequest());
+      expect(result.sessionId).toBeNull();
+    });
+
+    it('start() returns session ID when kimi.json has matching workspace entry', async () => {
+      writeKimiJson([
+        { path: '/tmp/cb-test-project', last_session_id: 'sess-from-kimi-abc' },
+      ]);
+      const payload = '{"role":"assistant","content":[{"type":"text","text":"ok"}]}';
+      const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+      const result = await engine.start(makeRequest());
+      expect(result.sessionId).toBe('sess-from-kimi-abc');
+    });
+
+    it('start() returns null when kimi.json exists but workspace not found', async () => {
+      writeKimiJson([
+        { path: '/some/other/path', last_session_id: 'sess-other' },
+      ]);
+      const payload = '{"role":"assistant","content":[{"type":"text","text":"ok"}]}';
+      const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+      const result = await engine.start(makeRequest());
+      expect(result.sessionId).toBeNull();
+    });
+
+    it('start() returns null when kimi.json has no work_dirs', async () => {
+      writeFileSync(
+        path.join(fakeHome, '.kimi', 'kimi.json'),
+        JSON.stringify({ version: 1 }),
+      );
+      const payload = '{"role":"assistant","content":[{"type":"text","text":"ok"}]}';
+      const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+      const result = await engine.start(makeRequest());
+      expect(result.sessionId).toBeNull();
+    });
+
+    it('send() returns session ID from kimi.json', async () => {
+      writeKimiJson([
+        { path: '/tmp/cb-test-project', last_session_id: 'sess-resumed-xyz' },
+      ]);
+      const { writeFileSync: wfs2, unlinkSync, chmodSync } = await import('node:fs');
+      const scriptPath = '/tmp/cb-kimi-send-session.sh';
+      const payload = '{"role":"assistant","content":[{"type":"text","text":"resumed"}]}';
+      wfs2(scriptPath, `#!/bin/sh\necho '${payload}'\n`);
+      chmodSync(scriptPath, 0o755);
+      try {
+        const engine = new KimiCodeEngine({ command: scriptPath });
+        const result = await engine.send('old-sess', 'follow up', { cwd: '/tmp/cb-test-project' });
+        expect(result.sessionId).toBe('sess-resumed-xyz');
+      } finally {
+        unlinkSync(scriptPath);
+      }
+    });
+
+    it('returns null when kimi.json entry has no last_session_id', async () => {
+      writeKimiJson([
+        { path: '/tmp/cb-test-project' },
+      ]);
+      const payload = '{"role":"assistant","content":[{"type":"text","text":"ok"}]}';
+      const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+      const result = await engine.start(makeRequest());
+      expect(result.sessionId).toBeNull();
+    });
+
+    it('returns null when last_session_id is empty string', async () => {
+      writeKimiJson([
+        { path: '/tmp/cb-test-project', last_session_id: '' },
+      ]);
+      const payload = '{"role":"assistant","content":[{"type":"text","text":"ok"}]}';
+      const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+      const result = await engine.start(makeRequest());
+      expect(result.sessionId).toBeNull();
+    });
+
+    it('picks the correct workspace from multiple entries', async () => {
+      writeKimiJson([
+        { path: '/some/other/project', last_session_id: 'sess-wrong' },
+        { path: '/tmp/cb-test-project', last_session_id: 'sess-right' },
+        { path: '/another/project', last_session_id: 'sess-also-wrong' },
+      ]);
+      const payload = '{"role":"assistant","content":[{"type":"text","text":"ok"}]}';
+      const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+      const result = await engine.start(makeRequest());
+      expect(result.sessionId).toBe('sess-right');
+    });
   });
 });
