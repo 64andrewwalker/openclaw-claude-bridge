@@ -26,172 +26,199 @@ export class TaskRunner {
 
   async processRun(runId: string): Promise<void> {
     const startTime = Date.now();
-    const request = await this.runManager.consumeRequest(runId);
 
-    if (!request) {
-      await this.fail(
-        runId,
-        startTime,
-        makeError("REQUEST_INVALID", "No request.json found"),
-      );
-      return;
-    }
-
-    // Validate request against schema
-    const validation = validateRequest(request);
-    if (!validation.success) {
-      await this.fail(
-        runId,
-        startTime,
-        makeError("REQUEST_INVALID", validation.error.message),
-      );
-      return;
-    }
-
-    // Security: resolve workspace via realpathSync (follows symlinks) before
-    // checking against allowed_roots.  Fall back to a WORKSPACE_NOT_FOUND
-    // failure for paths that don't exist yet (realpathSync requires existence).
-    let resolvedWorkspace: string;
     try {
-      resolvedWorkspace = fs.realpathSync(request.workspace_path);
-    } catch {
-      await this.fail(
-        runId,
-        startTime,
-        makeError(
-          "WORKSPACE_NOT_FOUND",
-          `Workspace not found: ${request.workspace_path}`,
-        ),
-      );
-      return;
-    }
+      const request = await this.runManager.consumeRequest(runId);
 
-    if (request.allowed_roots && request.allowed_roots.length > 0) {
-      // Use realpathSync for roots too so symlinks in allowed_roots are resolved
-      // consistently with the workspace resolution above. Fall back to
-      // path.resolve for any root that does not exist on disk yet.
-      const resolvedRoots = request.allowed_roots.map((r) => {
-        try {
-          return fs.realpathSync(r);
-        } catch {
-          return path.resolve(r);
+      if (!request) {
+        await this.fail(
+          runId,
+          startTime,
+          makeError("REQUEST_INVALID", "No request.json found"),
+        );
+        return;
+      }
+
+      // Validate request against schema
+      const validation = validateRequest(request);
+      if (!validation.success) {
+        await this.fail(
+          runId,
+          startTime,
+          makeError("REQUEST_INVALID", validation.error.message),
+        );
+        return;
+      }
+
+      // Security: resolve workspace via realpathSync (follows symlinks) before
+      // checking against allowed_roots.  Fall back to a WORKSPACE_NOT_FOUND
+      // failure for paths that don't exist yet (realpathSync requires existence).
+      let resolvedWorkspace: string;
+      try {
+        resolvedWorkspace = fs.realpathSync(request.workspace_path);
+      } catch {
+        await this.fail(
+          runId,
+          startTime,
+          makeError(
+            "WORKSPACE_NOT_FOUND",
+            `Workspace not found: ${request.workspace_path}`,
+          ),
+        );
+        return;
+      }
+
+      if (request.allowed_roots && request.allowed_roots.length > 0) {
+        // Use realpathSync for roots too so symlinks in allowed_roots are resolved
+        // consistently with the workspace resolution above. Fall back to
+        // path.resolve for any root that does not exist on disk yet.
+        const resolvedRoots = request.allowed_roots.map((r) => {
+          try {
+            return fs.realpathSync(r);
+          } catch {
+            return path.resolve(r);
+          }
+        });
+        const hasFilesystemRoot = resolvedRoots.some((r) => r === path.sep);
+        if (hasFilesystemRoot) {
+          await this.fail(
+            runId,
+            startTime,
+            makeError(
+              "WORKSPACE_INVALID",
+              "Filesystem root is not permitted as an allowed_root",
+            ),
+          );
+          return;
         }
-      });
-      const hasFilesystemRoot = resolvedRoots.some((r) => r === path.sep);
-      if (hasFilesystemRoot) {
+        const isAllowed = resolvedRoots.some(
+          (resolvedRoot) =>
+            resolvedWorkspace === resolvedRoot ||
+            resolvedWorkspace.startsWith(resolvedRoot + path.sep),
+        );
+        if (!isAllowed) {
+          await this.fail(
+            runId,
+            startTime,
+            makeError(
+              "WORKSPACE_INVALID",
+              `Workspace ${resolvedWorkspace} is outside allowed roots: ${request.allowed_roots.join(", ")}`,
+            ),
+          );
+          return;
+        }
+      }
+
+      // Validate workspace is a directory (realpathSync already verified existence above)
+      if (!fs.statSync(resolvedWorkspace).isDirectory()) {
         await this.fail(
           runId,
           startTime,
           makeError(
-            "WORKSPACE_INVALID",
-            "Filesystem root is not permitted as an allowed_root",
+            "WORKSPACE_NOT_FOUND",
+            `Workspace is not a directory: ${request.workspace_path}`,
           ),
         );
         return;
       }
-      const isAllowed = resolvedRoots.some(
-        (resolvedRoot) =>
-          resolvedWorkspace === resolvedRoot ||
-          resolvedWorkspace.startsWith(resolvedRoot + path.sep),
-      );
-      if (!isAllowed) {
+
+      // Validate resume mode has a session_id — null session_id with resume
+      // would silently fall through to engine.start() and start a new task.
+      if (request.mode === "resume" && !request.session_id) {
         await this.fail(
           runId,
           startTime,
           makeError(
-            "WORKSPACE_INVALID",
-            `Workspace ${resolvedWorkspace} is outside allowed roots: ${request.allowed_roots.join(", ")}`,
+            "REQUEST_INVALID",
+            "resume mode requires a non-null session_id",
           ),
         );
         return;
       }
-    }
 
-    // Validate workspace is a directory (realpathSync already verified existence above)
-    if (!fs.statSync(resolvedWorkspace).isDirectory()) {
-      await this.fail(
-        runId,
-        startTime,
-        makeError(
-          "WORKSPACE_NOT_FOUND",
-          `Workspace is not a directory: ${request.workspace_path}`,
-        ),
-      );
-      return;
-    }
+      // Resolve the correct engine for this request
+      const engine = this.engineResolver(request.engine ?? "claude-code");
 
-    // Resolve the correct engine for this request
-    const engine = this.engineResolver(request.engine ?? "claude-code");
+      // Execute via engine
+      const engineResponse = await (async () => {
+        if (request.mode === "resume" && request.session_id) {
+          await this.sessionManager.transition(runId, "running", {
+            session_id: request.session_id,
+          });
+          return engine.send(request.session_id, request.message, {
+            timeoutMs: request.constraints?.timeout_ms,
+            cwd: request.workspace_path,
+          });
+        } else {
+          await this.sessionManager.transition(runId, "running");
+          return engine.start(request);
+        }
+      })();
 
-    // Execute via engine
-    const engineResponse = await (async () => {
-      if (request.mode === "resume" && request.session_id) {
-        await this.sessionManager.transition(runId, "running", {
-          session_id: request.session_id,
+      // Update session with pid/session_id from engine
+      if (engineResponse.pid) {
+        await this.runManager.updateSession(runId, {
+          pid: engineResponse.pid,
+          session_id: engineResponse.sessionId ?? undefined,
         });
-        return engine.send(request.session_id, request.message, {
-          timeoutMs: request.constraints?.timeout_ms,
-          cwd: request.workspace_path,
-        });
-      } else {
-        await this.sessionManager.transition(runId, "running");
-        return engine.start(request);
       }
-    })();
 
-    // Update session with pid/session_id from engine
-    if (engineResponse.pid) {
-      await this.runManager.updateSession(runId, {
-        pid: engineResponse.pid,
-        session_id: engineResponse.sessionId ?? undefined,
+      const durationMs = Date.now() - startTime;
+
+      if (engineResponse.error) {
+        await this.fail(runId, startTime, engineResponse.error, engineResponse);
+        return;
+      }
+
+      // Success — write output.txt BEFORE result.json (invariant: result.json is completion signal)
+      const SUMMARY_LIMIT = 4000;
+      const output = engineResponse.output;
+      const summaryTruncated = output.length > SUMMARY_LIMIT;
+      const summary = summaryTruncated ? output.slice(0, SUMMARY_LIMIT) : output;
+
+      try {
+        this.runManager.writeOutputFile(runId, output);
+      } catch (e) {
+        await this.fail(
+          runId,
+          startTime,
+          makeError(
+            "OUTPUT_WRITE_FAILED",
+            `Failed to write output.txt: ${e instanceof Error ? e.message : String(e)}`,
+          ),
+          engineResponse,
+        );
+        return;
+      }
+
+      await this.sessionManager.transition(runId, "completed");
+      const outputAbsPath = path.join(
+        this.runManager.getRunDir(runId),
+        "output.txt",
+      );
+      await this.runManager.writeResult(runId, {
+        run_id: runId,
+        status: "completed",
+        summary,
+        summary_truncated: summaryTruncated,
+        output_path: outputAbsPath,
+        session_id: engineResponse.sessionId ?? null,
+        artifacts: [],
+        duration_ms: durationMs,
+        token_usage: engineResponse.tokenUsage ?? null,
+        files_changed: getFilesChanged(request.workspace_path),
       });
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    if (engineResponse.error) {
-      await this.fail(runId, startTime, engineResponse.error, engineResponse);
-      return;
-    }
-
-    // Success — write output.txt BEFORE result.json (invariant: result.json is completion signal)
-    const SUMMARY_LIMIT = 4000;
-    const output = engineResponse.output;
-    const summaryTruncated = output.length > SUMMARY_LIMIT;
-    const summary = summaryTruncated ? output.slice(0, SUMMARY_LIMIT) : output;
-
-    try {
-      this.runManager.writeOutputFile(runId, output);
     } catch (e) {
+      // Top-level catch: ensures result.json is ALWAYS written as the completion signal
       await this.fail(
         runId,
         startTime,
         makeError(
-          "OUTPUT_WRITE_FAILED",
-          `Failed to write output.txt: ${e instanceof Error ? e.message : String(e)}`,
+          "ENGINE_CRASH",
+          `Unexpected error: ${e instanceof Error ? e.message : String(e)}`,
         ),
-        engineResponse,
       );
-      return;
     }
-
-    await this.sessionManager.transition(runId, "completed");
-    const outputAbsPath = path.join(
-      this.runManager.getRunDir(runId),
-      "output.txt",
-    );
-    await this.runManager.writeResult(runId, {
-      run_id: runId,
-      status: "completed",
-      summary,
-      summary_truncated: summaryTruncated,
-      output_path: outputAbsPath,
-      session_id: engineResponse.sessionId ?? null,
-      artifacts: [],
-      duration_ms: durationMs,
-      token_usage: engineResponse.tokenUsage ?? null,
-      files_changed: getFilesChanged(request.workspace_path),
-    });
   }
 
   private async fail(

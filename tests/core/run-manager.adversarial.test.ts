@@ -93,9 +93,9 @@ describe("RunManager.listRuns – corrupt session file", () => {
     fs.rmSync(runsDir, { recursive: true, force: true });
   });
 
-  it("throws when any session.json in the directory is corrupt JSON", async () => {
-    // Bug hypothesis: listRuns calls JSON.parse without a try/catch.
-    // A single corrupt entry aborts the entire listing.
+  it("skips corrupt session.json entries and returns the valid ones", async () => {
+    // Fix: listRuns must NOT throw when one session.json is corrupt.
+    // A single corrupt entry must be skipped; the rest of the listing proceeds.
     await manager.createRun(BASE_REQUEST);
     await manager.createRun({ ...BASE_REQUEST, task_id: "task-adv-002" });
 
@@ -107,8 +107,9 @@ describe("RunManager.listRuns – corrupt session file", () => {
       "CORRUPT",
     );
 
-    // If this throws instead of skipping the bad entry, it's a bug.
-    await expect(manager.listRuns()).rejects.toThrow(SyntaxError);
+    // listRuns must resolve (not reject) and return the one valid run
+    const runs = await manager.listRuns();
+    expect(runs).toHaveLength(1);
   });
 });
 
