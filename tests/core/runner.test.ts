@@ -53,7 +53,9 @@ describe("TaskRunner", () => {
     const result = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
     expect(result.status).toBe("completed");
     expect(result.summary).toContain("task completed");
-    expect(result.output_path).toBe("output.txt");
+    // Bug #20 fix: output_path is now an absolute path
+    expect(path.isAbsolute(result.output_path)).toBe(true);
+    expect(result.output_path).toMatch(/output\.txt$/);
     expect(result.summary_truncated).toBe(false);
     const outputPath = path.join(runsDir, runId, "output.txt");
     expect(fs.existsSync(outputPath)).toBe(true);
@@ -343,7 +345,9 @@ describe("TaskRunner", () => {
 
     const resultPath = path.join(runsDir, runId, "result.json");
     const result = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
-    expect(result.output_path).toBe("output.txt");
+    // Bug #20 fix: output_path is now an absolute path
+    expect(path.isAbsolute(result.output_path)).toBe(true);
+    expect(result.output_path).toMatch(/output\.txt$/);
     expect(result.summary_truncated).toBe(false);
   });
 
@@ -444,7 +448,9 @@ describe("TaskRunner", () => {
     const result = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
     expect(result.summary).toBe("");
     expect(result.summary_truncated).toBe(false);
-    expect(result.output_path).toBe("output.txt");
+    // Bug #20 fix: output_path is now an absolute path
+    expect(path.isAbsolute(result.output_path)).toBe(true);
+    expect(result.output_path).toMatch(/output\.txt$/);
 
     const outputPath = path.join(runsDir, runId, "output.txt");
     expect(fs.existsSync(outputPath)).toBe(true);

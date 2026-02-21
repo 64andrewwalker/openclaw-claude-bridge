@@ -124,7 +124,14 @@ export class RunManager {
   }
 
   getRunDir(runId: string): string {
-    return path.join(this.runsDir, runId);
+    const resolved = path.resolve(this.runsDir, runId);
+    if (
+      !resolved.startsWith(this.runsDir + path.sep) &&
+      resolved !== this.runsDir
+    ) {
+      throw new Error(`Run ID escapes runs directory: ${runId}`);
+    }
+    return resolved;
   }
 
   getRunsDir(): string {

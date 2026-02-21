@@ -1,4 +1,5 @@
 import { z } from "zod";
+import path from "node:path";
 
 const ErrorSchema = z.object({
   code: z.string(),
@@ -21,7 +22,13 @@ export const ResultSchema = z
     status: z.enum(["completed", "failed"]),
     summary: z.string(),
     summary_truncated: z.boolean().default(false),
-    output_path: z.string().nullable().default(null),
+    output_path: z
+      .string()
+      .nullable()
+      .default(null)
+      .refine((p) => p === null || path.isAbsolute(p), {
+        message: "output_path must be an absolute path or null",
+      }),
     session_id: z.string().nullable(),
     artifacts: z.array(z.string()),
     duration_ms: z.number(),
