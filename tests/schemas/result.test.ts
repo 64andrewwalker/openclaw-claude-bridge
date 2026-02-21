@@ -1,14 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import { validateResult } from '../../src/schemas/result.js';
-import { makeError } from '../../src/schemas/errors.js';
+import { describe, it, expect } from "vitest";
+import { validateResult } from "../../src/schemas/result.js";
+import { makeError } from "../../src/schemas/errors.js";
 
-describe('ResultSchema', () => {
+describe("ResultSchema", () => {
   const validSuccess = {
-    run_id: 'run-001',
-    status: 'completed' as const,
-    summary: 'Task completed successfully',
-    session_id: 'session-abc',
-    artifacts: ['src/login.ts', 'tests/login.test.ts'],
+    run_id: "run-001",
+    status: "completed" as const,
+    summary: "Task completed successfully",
+    session_id: "session-abc",
+    artifacts: ["src/login.ts", "tests/login.test.ts"],
     duration_ms: 45000,
     token_usage: {
       prompt_tokens: 1200,
@@ -17,14 +17,17 @@ describe('ResultSchema', () => {
     },
   };
 
-  it('accepts a valid success result', () => {
+  it("accepts a valid success result", () => {
     const result = validateResult(validSuccess);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.status).toBe('completed');
-      expect(result.data.summary).toBe('Task completed successfully');
-      expect(result.data.session_id).toBe('session-abc');
-      expect(result.data.artifacts).toEqual(['src/login.ts', 'tests/login.test.ts']);
+      expect(result.data.status).toBe("completed");
+      expect(result.data.summary).toBe("Task completed successfully");
+      expect(result.data.session_id).toBe("session-abc");
+      expect(result.data.artifacts).toEqual([
+        "src/login.ts",
+        "tests/login.test.ts",
+      ]);
       expect(result.data.duration_ms).toBe(45000);
       expect(result.data.token_usage).toEqual({
         prompt_tokens: 1200,
@@ -34,7 +37,7 @@ describe('ResultSchema', () => {
     }
   });
 
-  it('accepts a success result with null token_usage', () => {
+  it("accepts a success result with null token_usage", () => {
     const input = { ...validSuccess, token_usage: null };
     const result = validateResult(input);
     expect(result.success).toBe(true);
@@ -43,71 +46,75 @@ describe('ResultSchema', () => {
     }
   });
 
-  it('accepts a failed result with error details', () => {
+  it("accepts a failed result with error details", () => {
     const input = {
       ...validSuccess,
-      status: 'failed',
+      status: "failed",
       error: {
-        code: 'ENGINE_TIMEOUT',
-        message: 'Engine execution timed out',
+        code: "ENGINE_TIMEOUT",
+        message: "Engine execution timed out",
         retryable: true,
       },
     };
     const result = validateResult(input);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.status).toBe('failed');
+      expect(result.data.status).toBe("failed");
       expect(result.data.error).toBeDefined();
       expect(result.data.error!.retryable).toBe(true);
     }
   });
 
-  it('accepts a failed result using makeError helper', () => {
-    const error = makeError('ENGINE_TIMEOUT');
+  it("accepts a failed result using makeError helper", () => {
+    const error = makeError("ENGINE_TIMEOUT");
     const input = {
       ...validSuccess,
-      status: 'failed',
+      status: "failed",
       error,
     };
     const result = validateResult(input);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.error!.code).toBe('ENGINE_TIMEOUT');
+      expect(result.data.error!.code).toBe("ENGINE_TIMEOUT");
       expect(result.data.error!.retryable).toBe(true);
-      expect(result.data.error!.message).toBe('Engine execution timed out');
+      expect(result.data.error!.message).toBe("Engine execution timed out");
     }
   });
 
-  it('rejects a failed result WITHOUT error details', () => {
+  it("rejects a failed result WITHOUT error details", () => {
     const input = {
       ...validSuccess,
-      status: 'failed',
+      status: "failed",
       // no error field
     };
     const result = validateResult(input);
     expect(result.success).toBe(false);
     if (!result.success) {
       const messages = result.error.issues.map((i: any) => i.message);
-      expect(messages).toContain('error is required when status is failed');
+      expect(messages).toContain("error is required when status is failed");
     }
   });
 
-  it('accepts a failed result with null session_id', () => {
+  it("accepts a failed result with null session_id", () => {
     const input = {
-      run_id: 'run-001',
-      status: 'failed',
-      summary: 'Failed before session started',
+      run_id: "run-001",
+      status: "failed",
+      summary: "Failed before session started",
       session_id: null,
       artifacts: [],
       duration_ms: 100,
       token_usage: null,
-      error: { code: 'WORKSPACE_NOT_FOUND', message: 'Not found', retryable: false },
+      error: {
+        code: "WORKSPACE_NOT_FOUND",
+        message: "Not found",
+        retryable: false,
+      },
     };
     const result = validateResult(input);
     expect(result.success).toBe(true);
   });
 
-  it('accepts a completed result without error field', () => {
+  it("accepts a completed result without error field", () => {
     // completed status should not require error
     const result = validateResult(validSuccess);
     expect(result.success).toBe(true);
@@ -116,16 +123,22 @@ describe('ResultSchema', () => {
     }
   });
 
-  it('accepts files_changed as string array', () => {
-    const input = { ...validSuccess, files_changed: ['src/auth.ts', 'tests/auth.test.ts'] };
+  it("accepts files_changed as string array", () => {
+    const input = {
+      ...validSuccess,
+      files_changed: ["src/auth.ts", "tests/auth.test.ts"],
+    };
     const result = validateResult(input);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.files_changed).toEqual(['src/auth.ts', 'tests/auth.test.ts']);
+      expect(result.data.files_changed).toEqual([
+        "src/auth.ts",
+        "tests/auth.test.ts",
+      ]);
     }
   });
 
-  it('accepts files_changed as null', () => {
+  it("accepts files_changed as null", () => {
     const input = { ...validSuccess, files_changed: null };
     const result = validateResult(input);
     expect(result.success).toBe(true);
@@ -134,7 +147,7 @@ describe('ResultSchema', () => {
     }
   });
 
-  it('defaults files_changed to null when omitted', () => {
+  it("defaults files_changed to null when omitted", () => {
     const result = validateResult(validSuccess);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -142,21 +155,64 @@ describe('ResultSchema', () => {
     }
   });
 
-  it('accepts error with suggestion field', () => {
+  it("accepts error with suggestion field", () => {
     const input = {
       ...validSuccess,
-      status: 'failed',
+      status: "failed",
       error: {
-        code: 'ENGINE_TIMEOUT',
-        message: 'Timed out',
+        code: "ENGINE_TIMEOUT",
+        message: "Timed out",
         retryable: true,
-        suggestion: 'Increase timeout',
+        suggestion: "Increase timeout",
       },
     };
     const result = validateResult(input);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.error!.suggestion).toBe('Increase timeout');
+      expect(result.data.error!.suggestion).toBe("Increase timeout");
+    }
+  });
+
+  it("accepts output_path as string", () => {
+    const input = { ...validSuccess, output_path: "output.txt" };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.output_path).toBe("output.txt");
+    }
+  });
+
+  it("accepts output_path as null", () => {
+    const input = { ...validSuccess, output_path: null };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.output_path).toBeNull();
+    }
+  });
+
+  it("defaults output_path to null when omitted", () => {
+    const result = validateResult(validSuccess);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.output_path).toBeNull();
+    }
+  });
+
+  it("accepts summary_truncated as true", () => {
+    const input = { ...validSuccess, summary_truncated: true };
+    const result = validateResult(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.summary_truncated).toBe(true);
+    }
+  });
+
+  it("defaults summary_truncated to false when omitted", () => {
+    const result = validateResult(validSuccess);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.summary_truncated).toBe(false);
     }
   });
 });

@@ -9,12 +9,12 @@ You can delegate complex, multi-file coding tasks to a separate AI coding engine
 
 ## Available Engines
 
-| Engine | Session Resume | Token Tracking | Model Selection |
-|--------|---------------|----------------|-----------------|
-| `claude-code` | yes | yes | `--model opus`, `--model claude-sonnet-4-6` |
-| `kimi-code` | yes | no | `--model k2p5` |
-| `opencode` | yes | yes | `--model pawpaw/claude-sonnet-4-5` |
-| `codex` | yes | no | `--model gpt-5.3-codex` |
+| Engine        | Session Resume | Token Tracking | Model Selection                             |
+| ------------- | -------------- | -------------- | ------------------------------------------- |
+| `claude-code` | yes            | yes            | `--model opus`, `--model claude-sonnet-4-6` |
+| `kimi-code`   | yes            | no             | `--model k2p5`                              |
+| `opencode`    | yes            | yes            | `--model pawpaw/claude-sonnet-4-5`          |
+| `codex`       | yes            | no             | `--model gpt-5.3-codex`                     |
 
 **How to choose:** Use `claude-code` (default) unless the task specifically requires another engine. Use `codebridge doctor` to check which engines are installed.
 
@@ -71,17 +71,26 @@ The result is JSON:
   "run_id": "run-xyz",
   "status": "completed",
   "summary": "Implemented auth middleware...",
+  "summary_truncated": false,
+  "output_path": "output.txt",
   "session_id": "session-abc",
   "files_changed": ["src/auth.ts", "src/middleware.ts"],
   "duration_ms": 15234,
-  "token_usage": { "prompt_tokens": 1234, "completion_tokens": 567, "total_tokens": 1801 },
+  "token_usage": {
+    "prompt_tokens": 1234,
+    "completion_tokens": 567,
+    "total_tokens": 1801
+  },
   "error": null
 }
 ```
 
 Key fields:
+
 - **status**: `completed` or `failed`
-- **summary**: What the engine did (first 2000 chars of output)
+- **summary**: What the engine did (first 4000 chars of output, preview only)
+- **summary_truncated**: `true` if summary was truncated, `false` if it contains the full output
+- **output_path**: Relative path to full output file in run directory (`"output.txt"` on success, `null` on failure)
 - **files_changed**: List of modified/created files in the workspace (null if not a git repo)
 - **error.suggestion**: What to do if it failed (human-readable guidance)
 - **error.retryable**: Whether automatic retry makes sense
@@ -90,7 +99,8 @@ Key fields:
 
 ## Reporting Results to the User
 
-**Success:** Report the summary and list files_changed. Example:
+**Success:** Report the summary and list files_changed. When `summary_truncated` is true, read the full output from `<runs-dir>/<run_id>/output.txt` if you need the complete engine response.
+
 > Task completed in 15s. Modified files: src/auth.ts, src/middleware.ts, tests/auth.test.ts
 
 **Failed + retryable:** Retry once automatically. If it fails again, report error.suggestion to the user.
@@ -123,17 +133,17 @@ codebridge status <run_id>
 
 ## Error Reference
 
-| Code | Retryable | What to Do |
-|------|-----------|------------|
-| ENGINE_TIMEOUT | yes | Increase --timeout or simplify the task |
-| ENGINE_CRASH | yes | Retry the task |
-| ENGINE_AUTH | no | Check engine credentials |
-| NETWORK_ERROR | yes | Check network connectivity and retry |
-| WORKSPACE_NOT_FOUND | no | Verify workspace path exists |
-| WORKSPACE_INVALID | no | Use a permitted directory |
-| REQUEST_INVALID | no | Fix intent/engine/workspace fields |
-| RUNNER_CRASH_RECOVERY | yes | Retry the task |
-| TASK_STOPPED | no | Task was manually stopped |
+| Code                  | Retryable | What to Do                              |
+| --------------------- | --------- | --------------------------------------- |
+| ENGINE_TIMEOUT        | yes       | Increase --timeout or simplify the task |
+| ENGINE_CRASH          | yes       | Retry the task                          |
+| ENGINE_AUTH           | no        | Check engine credentials                |
+| NETWORK_ERROR         | yes       | Check network connectivity and retry    |
+| WORKSPACE_NOT_FOUND   | no        | Verify workspace path exists            |
+| WORKSPACE_INVALID     | no        | Use a permitted directory               |
+| REQUEST_INVALID       | no        | Fix intent/engine/workspace fields      |
+| RUNNER_CRASH_RECOVERY | yes       | Retry the task                          |
+| TASK_STOPPED          | no        | Task was manually stopped               |
 
 ## All Commands
 
