@@ -6,12 +6,21 @@ import type { Engine } from './engine.js';
 import { makeError } from '../schemas/errors.js';
 import { validateRequest } from '../schemas/request.js';
 
+export type EngineResolver = (name: string) => Engine;
+
 export class TaskRunner {
+  private engineResolver: EngineResolver;
+
   constructor(
     private runManager: RunManager,
     private sessionManager: SessionManager,
-    private engine: Engine,
-  ) {}
+    engineOrResolver: Engine | EngineResolver,
+  ) {
+    // Support both legacy Engine injection and new resolver function
+    this.engineResolver = typeof engineOrResolver === 'function'
+      ? engineOrResolver
+      : () => engineOrResolver;
+  }
 
   async processRun(runId: string): Promise<void> {
     const startTime = Date.now();
@@ -55,17 +64,20 @@ export class TaskRunner {
       return;
     }
 
+    // Resolve the correct engine for this request
+    const engine = this.engineResolver(request.engine ?? 'claude-code');
+
     // Execute via engine
     const engineResponse = await (async () => {
       if (request.mode === 'resume' && request.session_id) {
         await this.sessionManager.transition(runId, 'running', { session_id: request.session_id });
-        return this.engine.send(request.session_id, request.message, {
+        return engine.send(request.session_id, request.message, {
           timeoutMs: request.constraints?.timeout_ms,
           cwd: request.workspace_path,
         });
       } else {
         await this.sessionManager.transition(runId, 'running');
-        return this.engine.start(request);
+        return engine.start(request);
       }
     })();
 

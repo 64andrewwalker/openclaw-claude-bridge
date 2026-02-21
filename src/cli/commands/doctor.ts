@@ -36,6 +36,15 @@ export function doctorCommand(): Command {
         checks.push({ name: 'Claude CLI', status: 'fail', detail: 'Not found in PATH (or common bin paths)' });
       }
       try {
+        const kimiVersion = execSync('kimi --version 2>/dev/null', {
+          encoding: 'utf-8',
+          env: { ...process.env, PATH: mergedPath },
+        }).trim();
+        checks.push({ name: 'Kimi CLI', status: 'ok', detail: kimiVersion });
+      } catch {
+        checks.push({ name: 'Kimi CLI', status: 'warn', detail: 'Not found in PATH (optional: needed for kimi-code engine)' });
+      }
+      try {
         if (existsSync(opts.runsDir)) {
           accessSync(opts.runsDir, constants.W_OK);
           checks.push({ name: 'Runs directory', status: 'ok', detail: opts.runsDir });

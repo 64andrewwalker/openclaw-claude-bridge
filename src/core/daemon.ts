@@ -1,6 +1,6 @@
 import { RunManager } from './run-manager.js';
 import { SessionManager } from './session-manager.js';
-import { TaskRunner } from './runner.js';
+import { TaskRunner, type EngineResolver } from './runner.js';
 import { Reconciler } from './reconciler.js';
 import type { Engine } from './engine.js';
 import * as fs from 'node:fs';
@@ -15,10 +15,10 @@ export class Daemon {
   private processing = new Set<string>();
   private maxConcurrent: number;
 
-  constructor(runsDir: string, engine: Engine, private intervalMs = 2000, maxConcurrent = 4) {
+  constructor(runsDir: string, engineOrResolver: Engine | EngineResolver, private intervalMs = 2000, maxConcurrent = 4) {
     this.runManager = new RunManager(runsDir);
     this.sessionManager = new SessionManager(this.runManager);
-    this.runner = new TaskRunner(this.runManager, this.sessionManager, engine);
+    this.runner = new TaskRunner(this.runManager, this.sessionManager, engineOrResolver);
     this.reconciler = new Reconciler(this.runManager);
     this.maxConcurrent = Math.max(1, maxConcurrent);
   }

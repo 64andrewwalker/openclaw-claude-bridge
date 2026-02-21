@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdirSync } from 'node:fs';
-import { ClaudeCodeEngine } from '../../src/engines/claude-code';
-import type { TaskRequest } from '../../src/schemas/request';
+import { ClaudeCodeEngine } from '../../src/engines/claude-code.js';
+import type { TaskRequest } from '../../src/schemas/request.js';
 
 describe('ClaudeCodeEngine', () => {
   beforeAll(() => {
