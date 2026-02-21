@@ -81,7 +81,11 @@ export abstract class BaseEngine {
           resolve({ output: stdout, pid: child.pid ?? 0, exitCode: code, sessionId: null, error: makeError('ENGINE_CRASH', stderr || `Process exited with code ${code}`) });
           return;
         }
-        resolve(this.parseOutput(stdout, stderr, child.pid ?? 0));
+        try {
+          resolve(this.parseOutput(stdout, stderr, child.pid ?? 0));
+        } catch (err) {
+          resolve({ output: stdout, pid: child.pid ?? 0, exitCode: code, sessionId: null, error: makeError('ENGINE_CRASH', `Output parse error: ${(err as Error).message}`) });
+        }
       });
 
       child.on('error', (err) => {

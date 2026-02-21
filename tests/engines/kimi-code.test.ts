@@ -166,6 +166,80 @@ describe('KimiCodeEngine', () => {
     expect(result.sessionId).toBeNull();
   });
 
+  // --- send() method parsing tests ---
+  // Note: send() builds its own args (ignoring defaultArgs), so we use script wrappers.
+
+  it('send() parses stream-json response correctly', async () => {
+    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
+    const scriptPath = '/tmp/cb-send-parse.sh';
+    const payload = '{"role":"assistant","content":[{"type":"text","text":"resumed response"}]}';
+    writeFileSync(scriptPath, `#!/bin/sh\necho '${payload}'\n`);
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new KimiCodeEngine({ command: scriptPath });
+      const result = await engine.send('sess-123', 'follow up', { cwd: '/tmp/cb-test-project' });
+      expect(result.output).toBe('resumed response');
+      expect(result.error).toBeUndefined();
+      expect(result.sessionId).toBeNull();
+      expect(result.tokenUsage).toBeNull();
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
+  it('send() concatenates multiple text parts', async () => {
+    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
+    const scriptPath = '/tmp/cb-send-concat.sh';
+    const payload = '{"role":"assistant","content":[{"type":"text","text":"part1"},{"type":"text","text":" part2"}]}';
+    writeFileSync(scriptPath, `#!/bin/sh\necho '${payload}'\n`);
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new KimiCodeEngine({ command: scriptPath });
+      const result = await engine.send('sess-123', 'follow up', { cwd: '/tmp/cb-test-project' });
+      expect(result.output).toBe('part1 part2');
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
+  it('send() returns ENGINE_TIMEOUT on timeout', async () => {
+    const engine = new KimiCodeEngine({ command: 'sleep' });
+    // send() will call: sleep --print --output-format ... which sleep ignores, just sleeps
+    // Actually sleep with invalid args may error immediately. Use a script instead.
+    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
+    const scriptPath = '/tmp/cb-send-slow.sh';
+    writeFileSync(scriptPath, '#!/bin/sh\nsleep 10\n');
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine2 = new KimiCodeEngine({ command: scriptPath });
+      const result = await engine2.send('sess-123', 'slow', { timeoutMs: 500, cwd: '/tmp/cb-test-project' });
+      expect(result.error?.code).toBe('ENGINE_TIMEOUT');
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  }, 15000);
+
+  // --- buildStartArgs verification ---
+
+  it('start() includes -w and -p flags when no defaultArgs set', async () => {
+    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
+    const scriptPath = '/tmp/cb-check-start-args.sh';
+    writeFileSync(scriptPath, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new KimiCodeEngine({ command: scriptPath });
+      const result = await engine.start(makeRequest({ workspace_path: '/tmp/cb-test-project', message: 'test prompt' }));
+      expect(result.output).toContain('-w');
+      expect(result.output).toContain('/tmp/cb-test-project');
+      expect(result.output).toContain('-p');
+      expect(result.output).toContain('test prompt');
+      expect(result.output).toContain('--print');
+      expect(result.output).toContain('stream-json');
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
   it('builds resume args with --session flag', async () => {
     // Use node -e to echo all args as JSON. send() passes args directly to spawn.
     const engine = new KimiCodeEngine({
