@@ -59,8 +59,16 @@ export class RunManager {
       if (!entry.isDirectory()) continue;
       const sessionPath = path.join(this.runsDir, entry.name, "session.json");
       if (!fs.existsSync(sessionPath)) continue;
-      const raw = fs.readFileSync(sessionPath, "utf-8");
-      runs.push({ ...JSON.parse(raw), run_id: entry.name });
+      try {
+        const raw = fs.readFileSync(sessionPath, "utf-8");
+        runs.push({ ...JSON.parse(raw), run_id: entry.name });
+      } catch {
+        // Corrupt or unreadable session.json — skip this entry and continue.
+        // One bad file must not abort the entire listing or kill poll() cycles.
+        process.stderr.write(
+          `[RunManager] Warning: skipping corrupt session.json for run ${entry.name}\n`,
+        );
+      }
     }
     return runs;
   }
