@@ -5,7 +5,18 @@ description: Delegate complex coding tasks to another AI coding engine (Claude C
 
 # CodeBridge — Task Delegation Skill
 
-You can delegate complex, multi-file coding tasks to a separate AI coding engine instance via the `codebridge` CLI. Supported engines: Claude Code, Kimi Code, OpenCode, and Codex. The engine runs in its own process with its own context, executes the task, and returns structured results.
+You can delegate complex, multi-file coding tasks to a separate AI coding engine instance via the `codebridge` CLI. The engine runs in its own process with its own context, executes the task, and returns structured results.
+
+## Available Engines
+
+| Engine | Session Resume | Token Tracking | Model Selection |
+|--------|---------------|----------------|-----------------|
+| `claude-code` | yes | yes | `--model opus`, `--model claude-sonnet-4-6` |
+| `kimi-code` | no | no | `--model k2p5` |
+| `opencode` | yes | yes | `--model pawpaw/claude-sonnet-4-5` |
+| `codex` | yes | no | `--model gpt-5.3-codex` |
+
+**How to choose:** Use `claude-code` (default) unless the task specifically requires another engine. Use `codebridge doctor` to check which engines are installed.
 
 ## When to Use
 
@@ -19,6 +30,20 @@ You can delegate complex, multi-file coding tasks to a separate AI coding engine
 - Tasks in your current workspace that don't need isolation
 - Read-only exploration (use your own tools instead)
 
+## First-Time Setup
+
+```bash
+codebridge install
+# Builds, links globally, outputs path to install guide at /tmp/codebridge-install.md
+```
+
+To verify which engines are available:
+
+```bash
+codebridge doctor
+# Returns JSON with status of each engine CLI
+```
+
 ## Submitting a Task
 
 ```bash
@@ -27,18 +52,15 @@ codebridge submit \
   --workspace <absolute-path> \
   --message "<clear task description>" \
   --engine <claude-code|kimi-code|opencode|codex> \
-  --model <provider/model>  # optional, engine-specific
+  --model <model-name> \
   --wait \
   --timeout 120000
 ```
 
-Engine-specific model flags:
-- `claude-code`: no model flag (uses configured model)
-- `kimi-code`: no model flag
-- `opencode`: `-m provider/model` (e.g., `pawpaw/claude-sonnet-4-5`)
-- `codex`: `-m model` (e.g., `gpt-5.3-codex`)
-
-Always use `--wait` for tasks under 5 minutes. For longer tasks, omit `--wait` and poll with `codebridge status <run_id>`.
+- `--engine`: Which AI engine to use (default: `claude-code`)
+- `--model`: Optional. Model name passed to the engine (format depends on engine, see table above)
+- `--wait`: Block until task completes. Use for tasks under 5 minutes. Omit for longer tasks and poll with `codebridge status`.
+- `--timeout`: Max execution time in ms (default: 1800000 = 30 min)
 
 ## Reading the Result
 
@@ -64,6 +86,7 @@ Key fields:
 - **error.suggestion**: What to do if it failed (human-readable guidance)
 - **error.retryable**: Whether automatic retry makes sense
 - **session_id**: For sending follow-up messages via `resume`
+- **token_usage**: Token counts (null for engines that don't track)
 
 ## Reporting Results to the User
 
@@ -105,16 +128,22 @@ codebridge status <run_id>
 | ENGINE_TIMEOUT | yes | Increase --timeout or simplify the task |
 | ENGINE_CRASH | yes | Retry the task |
 | ENGINE_AUTH | no | Check engine credentials |
+| NETWORK_ERROR | yes | Check network connectivity and retry |
 | WORKSPACE_NOT_FOUND | no | Verify workspace path exists |
 | WORKSPACE_INVALID | no | Use a permitted directory |
 | REQUEST_INVALID | no | Fix intent/engine/workspace fields |
 | RUNNER_CRASH_RECOVERY | yes | Retry the task |
 | TASK_STOPPED | no | Task was manually stopped |
 
-## Other Commands
+## All Commands
 
 ```bash
-codebridge stop <run_id>       # Force-stop a running task
-codebridge logs <run_id>       # View task logs
-codebridge doctor              # Check environment (engines, paths)
+codebridge submit [options]       # Submit a new coding task
+codebridge status <run_id>        # Query status of a run
+codebridge resume <run_id>        # Send follow-up to existing session
+codebridge stop <run_id>          # Force-stop a running task
+codebridge logs <run_id>          # View task logs
+codebridge doctor                 # Check environment (engines, paths)
+codebridge install                # Build, link, generate install guide
+codebridge start                  # Start daemon runner (watches for new tasks)
 ```

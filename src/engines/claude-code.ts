@@ -33,7 +33,12 @@ export class ClaudeCodeEngine extends BaseEngine implements Engine {
 
   private buildStartArgs(task: TaskRequest): string[] {
     if (this.defaultArgs.length > 0) return [...this.defaultArgs];
-    return [...this.permissionArgs(), '--print', '--output-format', 'json', '-p', task.message];
+    const args = [...this.permissionArgs(), '--print', '--output-format', 'json'];
+    if (task.model) {
+      args.push('--model', task.model);
+    }
+    args.push('-p', task.message);
+    return args;
   }
 
   private permissionArgs(): string[] {

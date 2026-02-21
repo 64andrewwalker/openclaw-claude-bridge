@@ -44,7 +44,7 @@ TaskRunner → consumes request atomically, validates schema + security boundari
                          ↓
 Engine (resolved by registry) → spawns CLI with appropriate flags
   ClaudeCodeEngine → `claude --print --output-format json`
-  KimiCodeEngine   → `kimi --print --output-format stream-json -w <workspace>`
+  KimiCodeEngine   → `kimi --print --output-format stream-json -w <workspace> -p <message>`
   OpenCodeEngine   → `opencode run --format json --dir <workspace>`
   CodexEngine      → `codex exec --json --full-auto -C <workspace>`
 ```
