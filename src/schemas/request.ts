@@ -11,7 +11,8 @@ export const RequestSchema = z.object({
     { message: 'Workspace path is a disallowed root path' }
   ),
   message: z.string().min(1),
-  engine: z.enum(['claude-code', 'kimi-code']).default('claude-code'),
+  engine: z.enum(['claude-code', 'kimi-code', 'opencode', 'codex']).default('claude-code'),
+  model: z.string().optional(),
   mode: z.enum(['new', 'resume']).default('new'),
   session_id: z.string().nullable().default(null),
   constraints: z.object({

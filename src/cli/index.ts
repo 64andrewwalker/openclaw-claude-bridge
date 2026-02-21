@@ -7,6 +7,7 @@ import { stopCommand } from './commands/stop.js';
 import { logsCommand } from './commands/logs.js';
 import { doctorCommand } from './commands/doctor.js';
 import { startCommand } from './commands/start.js';
+import { installCommand } from './commands/install.js';
 
 const program = new Command();
 program
@@ -21,5 +22,6 @@ program.addCommand(stopCommand());
 program.addCommand(logsCommand());
 program.addCommand(doctorCommand());
 program.addCommand(startCommand());
+program.addCommand(installCommand());
 
 program.parse();
