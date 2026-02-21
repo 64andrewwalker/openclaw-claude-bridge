@@ -102,7 +102,7 @@ export class OpenCodeEngine extends BaseEngine implements Engine {
       } catch { /* skip unparseable lines */ }
     }
 
-    if (textParts.length > 0 || sessionId) {
+    if (textParts.length > 0 || sessionId || tokenUsage) {
       return { text: textParts.join(''), sessionId, tokenUsage };
     }
 

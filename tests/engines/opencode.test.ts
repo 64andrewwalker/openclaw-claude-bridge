@@ -231,6 +231,7 @@ describe('OpenCodeEngine', () => {
       expect(result.output).toBe('resumed response');
       expect(result.sessionId).toBe('sess-abc');
       expect(result.error).toBeUndefined();
+      expect(result.tokenUsage).toBeNull();
     } finally {
       unlinkSync(scriptPath);
     }

@@ -10,10 +10,20 @@ export function installCommand(): Command {
       const projectRoot = path.resolve(import.meta.dirname, '..', '..', '..');
 
       // Build and link
-      process.stderr.write('Building...\n');
-      execSync('npm run build', { cwd: projectRoot, stdio: 'inherit' });
-      process.stderr.write('Linking globally...\n');
-      execSync('npm link', { cwd: projectRoot, stdio: 'inherit' });
+      try {
+        process.stderr.write('Building...\n');
+        execSync('npm run build', { cwd: projectRoot, stdio: 'inherit' });
+      } catch {
+        process.stderr.write('Build failed. Check TypeScript errors above.\n');
+        process.exit(1);
+      }
+      try {
+        process.stderr.write('Linking globally...\n');
+        execSync('npm link', { cwd: projectRoot, stdio: 'inherit' });
+      } catch {
+        process.stderr.write('npm link failed. You may need sudo or to configure npm prefix.\n');
+        process.exit(1);
+      }
 
       // Gather info
       let binaryPath = 'codebridge';

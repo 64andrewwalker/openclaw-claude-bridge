@@ -250,6 +250,8 @@ describe('CodexEngine', () => {
       const result = await engine.send('thread-abc', 'follow up', { cwd: '/tmp/cb-test-project' });
       expect(result.output).toBe('resumed response');
       expect(result.error).toBeUndefined();
+      expect(result.sessionId).toBeNull();
+      expect(result.tokenUsage).toBeNull();
     } finally {
       unlinkSync(scriptPath);
     }
