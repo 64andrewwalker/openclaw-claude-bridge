@@ -451,7 +451,7 @@ describe("TaskRunner", () => {
     expect(fs.readFileSync(outputPath, "utf-8")).toBe("");
   });
 
-  it("does not include output_path or summary_truncated in failure result", async () => {
+  it("includes output_path and summary_truncated in failure result", async () => {
     const engine = new ClaudeCodeEngine({ command: "false" });
     const runner = new TaskRunner(runManager, sessionManager, engine);
     const runId = await runManager.createRun({
@@ -468,10 +468,48 @@ describe("TaskRunner", () => {
     const resultPath = path.join(runsDir, runId, "result.json");
     const result = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
     expect(result.status).toBe("failed");
-    expect(result.output_path).toBeUndefined();
-    expect(result.summary_truncated).toBeUndefined();
+    expect(result.output_path).toBeNull();
+    expect(result.summary_truncated).toBe(false);
 
     const outputPath = path.join(runsDir, runId, "output.txt");
     expect(fs.existsSync(outputPath)).toBe(false);
+  });
+
+  it("still writes result.json when writeOutputFile throws", async () => {
+    const engine = new ClaudeCodeEngine({
+      command: "echo",
+      defaultArgs: ["output content"],
+    });
+    const runner = new TaskRunner(runManager, sessionManager, engine);
+    const runId = await runManager.createRun({
+      task_id: "task-write-fail",
+      intent: "coding",
+      workspace_path: workspaceDir,
+      message: "Test write failure",
+      engine: "claude-code",
+      mode: "new",
+    });
+
+    // Make the run directory read-only so writeOutputFile fails
+    const runDir = path.join(runsDir, runId);
+    // Remove write permission after request is consumed but before processRun writes output
+    // We achieve this by replacing writeOutputFile with a throwing stub
+    const origWriteOutputFile = runManager.writeOutputFile.bind(runManager);
+    runManager.writeOutputFile = () => {
+      throw new Error("Disk full");
+    };
+
+    await runner.processRun(runId);
+
+    // Restore original method
+    runManager.writeOutputFile = origWriteOutputFile;
+
+    const resultPath = path.join(runDir, "result.json");
+    expect(fs.existsSync(resultPath)).toBe(true);
+    const result = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
+    expect(result.status).toBe("failed");
+    expect(result.error.code).toBe("OUTPUT_WRITE_FAILED");
+    expect(result.output_path).toBeNull();
+    expect(result.summary_truncated).toBe(false);
   });
 });

@@ -138,7 +138,20 @@ export class TaskRunner {
     const summaryTruncated = output.length > SUMMARY_LIMIT;
     const summary = summaryTruncated ? output.slice(0, SUMMARY_LIMIT) : output;
 
-    this.runManager.writeOutputFile(runId, output);
+    try {
+      this.runManager.writeOutputFile(runId, output);
+    } catch (e) {
+      await this.fail(
+        runId,
+        startTime,
+        makeError(
+          "OUTPUT_WRITE_FAILED",
+          `Failed to write output.txt: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+        engineResponse,
+      );
+      return;
+    }
 
     await this.sessionManager.transition(runId, "completed");
     await this.runManager.writeResult(runId, {
@@ -181,6 +194,8 @@ export class TaskRunner {
       run_id: runId,
       status: "failed",
       summary: error.message,
+      summary_truncated: false,
+      output_path: null,
       session_id: engineResponse?.sessionId ?? null,
       artifacts: [],
       duration_ms: Date.now() - startTime,
