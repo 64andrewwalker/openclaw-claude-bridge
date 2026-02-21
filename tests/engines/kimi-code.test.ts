@@ -194,6 +194,62 @@ describe('KimiCodeEngine', () => {
     expect(result.error).toBeUndefined();
   });
 
+  // --- Role filtering tests ---
+
+  it('returns empty string when output contains only user-role messages', async () => {
+    const payload = '{"role":"user","content":[{"type":"text","text":"user prompt echoed back"}]}';
+    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('returns empty string when output contains only system-role messages', async () => {
+    const payload = '{"role":"system","content":[{"type":"text","text":"system instruction echoed back"}]}';
+    const engine = new KimiCodeEngine({ command: 'echo', defaultArgs: [payload] });
+    const result = await engine.start(makeRequest());
+    expect(result.output).toBe('');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('returns empty string when only non-assistant messages present (no raw JSON bleed-through)', async () => {
+    // Edge case: NDJSON with only user+system messages — should return "" not raw JSON
+    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
+    const scriptPath = '/tmp/cb-role-filter-only-non-assistant.sh';
+    writeFileSync(scriptPath, [
+      '#!/bin/sh',
+      'echo \'{"role":"user","content":[{"type":"text","text":"what is 2+2?"}]}\'',
+      'echo \'{"role":"system","content":[{"type":"text","text":"You are a helpful assistant"}]}\'',
+    ].join('\n'));
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new KimiCodeEngine({ command: scriptPath });
+      const result = await engine.start(makeRequest());
+      expect(result.output).toBe('');
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
+  it('filters user-role messages and returns only assistant text in mixed stream', async () => {
+    // Mixed stream: user message followed by assistant reply
+    const { writeFileSync, unlinkSync, chmodSync } = await import('node:fs');
+    const scriptPath = '/tmp/cb-role-filter-mixed.sh';
+    writeFileSync(scriptPath, [
+      '#!/bin/sh',
+      'echo \'{"role":"user","content":[{"type":"text","text":"tell me a joke"}]}\'',
+      'echo \'{"role":"assistant","content":[{"type":"text","text":"Why did the chicken cross the road?"}]}\'',
+    ].join('\n'));
+    chmodSync(scriptPath, 0o755);
+    try {
+      const engine = new KimiCodeEngine({ command: scriptPath });
+      const result = await engine.start(makeRequest());
+      expect(result.output).toBe('Why did the chicken cross the road?');
+    } finally {
+      unlinkSync(scriptPath);
+    }
+  });
+
   // --- send() method parsing tests ---
   // Note: send() builds its own args (ignoring defaultArgs), so we use script wrappers.
 
