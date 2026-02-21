@@ -1,11 +1,11 @@
 ---
 name: codebridge
-description: Delegate complex coding tasks to another AI coding engine (Claude Code or Kimi Code) via CLI, with structured results.
+description: Delegate complex coding tasks to another AI coding engine (Claude Code, Kimi Code, OpenCode, or Codex) via CLI, with structured results.
 ---
 
 # CodeBridge — Task Delegation Skill
 
-You can delegate complex, multi-file coding tasks to a separate AI coding engine instance via the `codebridge` CLI. The engine runs in its own process with its own context, executes the task, and returns structured results.
+You can delegate complex, multi-file coding tasks to a separate AI coding engine instance via the `codebridge` CLI. Supported engines: Claude Code, Kimi Code, OpenCode, and Codex. The engine runs in its own process with its own context, executes the task, and returns structured results.
 
 ## When to Use
 
@@ -26,10 +26,17 @@ codebridge submit \
   --intent <coding|refactor|debug|ops> \
   --workspace <absolute-path> \
   --message "<clear task description>" \
-  --engine <claude-code|kimi-code> \
+  --engine <claude-code|kimi-code|opencode|codex> \
+  --model <provider/model>  # optional, engine-specific
   --wait \
   --timeout 120000
 ```
+
+Engine-specific model flags:
+- `claude-code`: no model flag (uses configured model)
+- `kimi-code`: no model flag
+- `opencode`: `-m provider/model` (e.g., `pawpaw/claude-sonnet-4-5`)
+- `codex`: `-m model` (e.g., `gpt-5.3-codex`)
 
 Always use `--wait` for tasks under 5 minutes. For longer tasks, omit `--wait` and poll with `codebridge status <run_id>`.
 

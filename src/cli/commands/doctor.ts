@@ -45,6 +45,24 @@ export function doctorCommand(): Command {
         checks.push({ name: 'Kimi CLI', status: 'warn', detail: 'Not found in PATH (optional: needed for kimi-code engine)' });
       }
       try {
+        const opencodeVersion = execSync('opencode --version 2>/dev/null', {
+          encoding: 'utf-8',
+          env: { ...process.env, PATH: mergedPath },
+        }).trim();
+        checks.push({ name: 'OpenCode CLI', status: 'ok', detail: opencodeVersion });
+      } catch {
+        checks.push({ name: 'OpenCode CLI', status: 'warn', detail: 'Not found in PATH (optional: needed for opencode engine)' });
+      }
+      try {
+        const codexVersion = execSync('codex --version 2>/dev/null', {
+          encoding: 'utf-8',
+          env: { ...process.env, PATH: mergedPath },
+        }).trim();
+        checks.push({ name: 'Codex CLI', status: 'ok', detail: codexVersion });
+      } catch {
+        checks.push({ name: 'Codex CLI', status: 'warn', detail: 'Not found in PATH (optional: needed for codex engine)' });
+      }
+      try {
         if (existsSync(opts.runsDir)) {
           accessSync(opts.runsDir, constants.W_OK);
           checks.push({ name: 'Runs directory', status: 'ok', detail: opts.runsDir });

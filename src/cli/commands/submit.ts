@@ -9,6 +9,7 @@ export function submitCommand(): Command {
     .requiredOption('--workspace <path>', 'Workspace directory path')
     .requiredOption('--message <text>', 'Task description / prompt')
     .option('--engine <name>', 'Engine to use', 'claude-code')
+    .option('--model <name>', 'Model to use (engine-specific)')
     .option('--wait', 'Block until task completes', false)
     .option('--timeout <ms>', 'Timeout in milliseconds', '1800000')
     .option('--runs-dir <path>', 'Runs directory', path.join(process.cwd(), '.runs'))
@@ -22,6 +23,7 @@ export function submitCommand(): Command {
         engine: opts.engine,
         mode: 'new',
         constraints: { timeout_ms: parseInt(opts.timeout), allow_network: true },
+        ...(opts.model ? { model: opts.model } : {}),
       });
 
       if (!opts.wait) {
