@@ -51,9 +51,27 @@ export class TaskRunner {
       }
 
       // Security: resolve workspace and check against allowed_roots
-      const resolvedWorkspace = path.resolve(request.workspace_path);
+      // Use realpathSync to follow symlinks — path.resolve() only resolves the
+      // string path and does NOT follow symlinks on disk.
+      let resolvedWorkspace: string;
+      try {
+        resolvedWorkspace = fs.realpathSync(request.workspace_path);
+      } catch {
+        // realpathSync throws if the path doesn't exist; fall through to the
+        // WORKSPACE_NOT_FOUND check below using the string-resolved path.
+        resolvedWorkspace = path.resolve(request.workspace_path);
+      }
+
       if (request.allowed_roots && request.allowed_roots.length > 0) {
-        const resolvedRoots = request.allowed_roots.map((r) => path.resolve(r));
+        // Resolve allowed_roots using realpathSync (where the path exists) so
+        // the comparison is consistent with the symlink-resolved workspace path.
+        const resolvedRoots = request.allowed_roots.map((r) => {
+          try {
+            return fs.realpathSync(r);
+          } catch {
+            return path.resolve(r);
+          }
+        });
         const hasFilesystemRoot = resolvedRoots.some((r) => r === path.sep);
         if (hasFilesystemRoot) {
           await this.fail(
@@ -95,6 +113,20 @@ export class TaskRunner {
           makeError(
             "WORKSPACE_NOT_FOUND",
             `Workspace not found: ${request.workspace_path}`,
+          ),
+        );
+        return;
+      }
+
+      // Validate resume mode has a session_id — null session_id with resume
+      // would silently fall through to engine.start() and start a new task.
+      if (request.mode === "resume" && !request.session_id) {
+        await this.fail(
+          runId,
+          startTime,
+          makeError(
+            "REQUEST_INVALID",
+            "resume mode requires a non-null session_id",
           ),
         );
         return;
