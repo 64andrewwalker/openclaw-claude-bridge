@@ -53,6 +53,11 @@ describe("TaskRunner", () => {
     const result = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
     expect(result.status).toBe("completed");
     expect(result.summary).toContain("task completed");
+    expect(result.output_path).toBe("output.txt");
+    expect(result.summary_truncated).toBe(false);
+    const outputPath = path.join(runsDir, runId, "output.txt");
+    expect(fs.existsSync(outputPath)).toBe(true);
+    expect(fs.readFileSync(outputPath, "utf-8")).toContain("task completed");
     expect(result.duration_ms).toBeTypeOf("number");
   });
 
